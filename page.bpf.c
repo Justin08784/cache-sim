@@ -10,6 +10,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct list_entry {
 	struct list_entry *next;
+        struct list_entry *prev;
 	unsigned long pfn;
 };
 
@@ -21,7 +22,27 @@ struct list {
 };
 
 void list_track_access(struct list *list, unsigned long pfn) {
-	return;
+    struct list_entry *cur = list->head;
+    bool found = false;
+    // WARNING: what to do with hits/misses?
+    while(!cur) {
+        if (cur->pfn != pfn) {
+            cur = cur->next;
+            continue;
+        }
+
+        // found
+        found = true;
+        break;
+    }
+
+    if (found) {
+        list->hits++;
+        return;
+    } else {
+        list->misses++;
+        return;
+    }
 }
 
 void list_evict(struct list *list, int n) {
