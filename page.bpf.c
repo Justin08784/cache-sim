@@ -22,6 +22,18 @@ struct list {
 	int misses;
 };
 
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 4096);
+} events SEC(".maps");
+
+// struct {
+//     __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
+//     __uint(max_entries, 128);           // Maximum number of entries
+//     __type(key, int);                   // Key type
+//     __type(value, int);                 // Value type
+// } shared_map SEC(".maps");
+
 void list_track_access(struct list *list, unsigned long pfn) {
     struct list_entry *cur = list->head;
     // WARNING: what to do with hits/misses?
@@ -86,6 +98,10 @@ unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
 	return pfn;
 }
 
+struct event {
+    uint32_t key;
+    uint32_t value;
+};
 
 SEC("kprobe/folio_mark_accessed")
 int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
@@ -96,6 +112,19 @@ int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
 	bpf_printk("folio_mark_accessed: pid = %d, pfn=%ul\n", pid, pfn);
+
+        struct event *e;
+    	/* reserve sample from BPF ringbuf */
+	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	e->key = pid;
+	e->value = 42;
+
+	/* send data to user-space for post-processing */
+	bpf_ringbuf_submit(e, 0);
+	// __sync_fetch_and_add(&read, 1);
 
 	return 0;
 }

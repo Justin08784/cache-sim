@@ -23,6 +23,21 @@ static void sig_int(int signo)
 	stop = 1;
 }
 
+
+struct event {
+    uint32_t key;
+    uint32_t value;
+};
+
+static int handle_event(void *ctx, void *data, size_t data_sz)
+{
+// void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz) {
+    struct event *e = data;
+    printf("Key: %d, Value: %d\n", e->key, e->value);
+    return -1;
+}
+
+
 int main(int argc, char **argv)
 {
 	struct page_bpf *skel;
@@ -52,6 +67,13 @@ int main(int argc, char **argv)
 
 	printf("Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
 	       "to see output of the BPF programs.\n");
+        int map_fd = bpf_map__fd(skel->maps.shared_map);
+        struct ring_buffer *rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
+
+        while (!stop) {
+            ring_buffer__poll(rb, 100); // Poll for events
+        }
+
 
 	while (!stop) {
 		fprintf(stderr, ".");
