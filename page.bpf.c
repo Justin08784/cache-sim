@@ -4,6 +4,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include <assert.h>
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -23,7 +24,6 @@ struct list {
 
 void list_track_access(struct list *list, unsigned long pfn) {
     struct list_entry *cur = list->head;
-    bool found = false;
     // WARNING: what to do with hits/misses?
     while(!cur) {
         if (cur->pfn != pfn) {
@@ -32,21 +32,46 @@ void list_track_access(struct list *list, unsigned long pfn) {
         }
 
         // found
-        found = true;
         list->hits++;
         return;
     }
 
     list->misses++;
-    return;
 }
 
 void list_evict(struct list *list, int n) {
-	return;
+    // NOTE: I am assuming n == pfn
+    int cnt = 0;
+    struct list_entry *cur = list->tail;
+    struct list_entry *tmp;
+
+    while (!cur && cnt < n) {
+        tmp = cur;
+        cur = cur->prev;
+        // free(tmp);
+        cnt++;
+    }
+
+    // if (cnt < n) {
+    //     // there are fewer than n list entries
+    //     assert(cur == NULL);
+    // }
+
+    cur->next = NULL;
 }
 
 void mru_update_list(struct list *list, unsigned long pfn) {
-	return;
+    struct list_entry *prev_head = list->head;
+
+    // WARNING: need to create shared map for list heads?
+    // no alloc allowed in ebpf
+    // struct list_entry *new_head = malloc(sizeof(struct list_entry));
+    // struct list_entry *new_head = NULL;
+
+    // new_head->next = prev_head;
+    // if (prev_head)
+    //     prev_head->prev = new_head;
+    // list->head = new_head;
 }
 
 
