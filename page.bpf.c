@@ -22,28 +22,23 @@ struct list {
 };
 
 void list_track_access(struct list *list, unsigned long pfn) {
-        struct list_entry *cur = list->head;
-        bool found = false;
-        // WARNING: what to do with hits/misses?
-        while(!cur) {
-            if (cur->pfn != pfn) {
-                cur = cur->next;
-                continue;
-            }
-
-            // found
-            found = true;
-            break;
+    struct list_entry *cur = list->head;
+    bool found = false;
+    // WARNING: what to do with hits/misses?
+    while(!cur) {
+        if (cur->pfn != pfn) {
+            cur = cur->next;
+            continue;
         }
 
-        if (found) {
-            list->hits++;
-            return;
-        } else {
-            list->misses++;
-            return;
-        }
-	return;
+        // found
+        found = true;
+        list->hits++;
+        return;
+    }
+
+    list->misses++;
+    return;
 }
 
 void list_evict(struct list *list, int n) {
