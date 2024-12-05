@@ -29,7 +29,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
-    __uint(max_entries, 2);           // Maximum number of entries
+    __uint(max_entries, 4096);           // Maximum number of entries
     __type(key, int);                   // Key type
     __type(value, int);                 // Value type
 } shared_map SEC(".maps");
