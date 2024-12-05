@@ -27,12 +27,12 @@ struct {
     __uint(max_entries, 4096);
 } events SEC(".maps");
 
-// struct {
-//     __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
-//     __uint(max_entries, 128);           // Maximum number of entries
-//     __type(key, int);                   // Key type
-//     __type(value, int);                 // Value type
-// } shared_map SEC(".maps");
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
+    __uint(max_entries, 2);           // Maximum number of entries
+    __type(key, int);                   // Key type
+    __type(value, int);                 // Value type
+} shared_map SEC(".maps");
 
 void list_track_access(struct list *list, unsigned long pfn) {
     struct list_entry *cur = list->head;
