@@ -10,13 +10,91 @@
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include "page.skel.h"
-#include "page.h"
+#include "common.h"
 #include <stdlib.h>
-#include <assert.h>
 
-struct list;
-struct list_entry;
-struct event;
+struct list_entry {
+	struct list_entry *prev;
+	struct list_entry *next;
+	unsigned long folio;
+};
+
+struct list {
+	struct list_entry *head;
+	struct list_entry *tail;
+	int size;
+	int hits;
+	int misses;
+};
+
+struct list *list_init() {
+	struct list *list = (struct list *)malloc(sizeof(struct list));
+
+	list->head = NULL;
+	list->tail = NULL;
+	list->size = 0;
+	list->hits = 0;
+	list->misses = 0;
+
+	return list;
+}
+void list_add_entry(struct list *list, unsigned long folio) {
+	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
+
+	list_entry->folio = folio;
+	if (list->size == 0) {
+		list_entry->prev = list_entry;
+		list_entry->next = list_entry;
+		list->head = list_entry;
+		list->tail = list_entry;
+	} else {
+		list_entry->prev = list->tail;
+		list_entry->next = list->head;
+		list->head = list_entry;
+	}
+
+	list->size++;
+}
+void list_track_access(struct list *list, unsigned long folio) {
+	struct list_entry *current = list->head;
+	for (int i = 0; i < list->size; i++) {
+		if (current->folio == folio) {
+			list->hits++;
+			// TODO: move entry to front
+			return;
+		}
+		current = current->next;
+	}
+	list->misses++;
+	list_add_entry(list, folio);
+}
+
+void list_evict(struct list *list, int n) {
+	return;
+}
+
+void mru_update_list(struct list *list, unsigned long folio) {
+	return;
+}
+
+void list_print(struct list *list) {
+	struct list_entry *current = list->head;
+	for (int i = 0; i < list->size; i++) {
+		printf("Position: %d, Folio: %lu\n", i, current->folio);
+		current = current->next;
+	}
+	printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
+}
+
+struct list *list;
+int handle_event(void *ctx, void *data, size_t data_size) {
+	const struct event *e = data;
+
+	list_track_access(list, e->folio);
+	//printf("folio: %lu, type: %d\n", e->folio, e->type);
+
+	return 0;
+}
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -30,73 +108,11 @@ static void sig_int(int signo)
 	stop = 1;
 }
 
-
-
-static int handle_event(void *ctx, void *data, size_t data_sz)
-{
-// void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz) {
-    struct event *e = data;
-    printf("(%lu) Folio Addr: %lx, Type: %d\n", e->order_id, e->folio_ptr, e->etyp);
-    return -1;
-}
-
-void list_track_access(struct list *list, unsigned long pfn) {
-    struct list_entry *cur = list->head;
-    // WARNING: what to do with hits/misses?
-    while(!cur) {
-        if (cur->pfn != pfn) {
-            cur = cur->next;
-            continue;
-        }
-
-        // found
-        list->hits++;
-        return;
-    }
-
-    list->misses++;
-}
-
-void list_evict(struct list *list, int n) {
-    // NOTE: I am assuming n == pfn
-    int cnt = 0;
-    struct list_entry *cur = list->tail;
-    struct list_entry *tmp;
-
-    while (!cur && cnt < n) {
-        tmp = cur;
-        cur = cur->prev;
-        free(tmp);
-        cnt++;
-    }
-
-    if (cnt < n) {
-        // there are fewer than n list entries
-        assert(cur == NULL);
-    }
-
-    cur->next = NULL;
-}
-
-void mru_update_list(struct list *list, unsigned long pfn) {
-    struct list_entry *prev_head = list->head;
-
-    // WARNING: need to create shared map for list heads?
-    // no alloc allowed in ebpf
-    struct list_entry *new_head = malloc(sizeof(struct list_entry));
-    assert(new_head);
-
-    new_head->next = prev_head;
-    if (prev_head)
-        prev_head->prev = new_head;
-    list->head = new_head;
-}
-
-
 int main(int argc, char **argv)
 {
 	struct page_bpf *skel;
 	int err;
+	struct ring_buffer *rb;
 
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
@@ -120,19 +136,32 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
+	/* Set up ring buffer polling */
+	rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
+	if (!rb) {
+		err = -1;
+		fprintf(stderr, "Failed to create ring buffer\n");
+		goto cleanup;
+	}
+
 	printf("Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
 	       "to see output of the BPF programs.\n");
-        // int map_fd = bpf_map__fd(skel->maps.shared_map);
-        struct ring_buffer *rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
 
-        while (!stop) {
-            ring_buffer__poll(rb, 100); // Poll for events
-        }
-
-
+	list = list_init();
 	while (!stop) {
-		fprintf(stderr, ".");
-		sleep(1);
+		const int timeout_ms = 100;
+		err = ring_buffer__poll(rb, timeout_ms);
+		/* Ctrl-C will cause -EINTR */
+		if (err == -EINTR) {
+			err = 0;
+			break;
+		}
+		if (err < 0) {
+			printf("Error polling ring buffer: %d\n", err);
+			break;
+		}
+
+		list_print(list);
 	}
 
 cleanup:

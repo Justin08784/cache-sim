@@ -4,58 +4,41 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include "page.h"
+#include "common.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-struct list;
-struct list_entry;
-struct event;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1024 * sizeof(struct event));
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024 /* 256 KB */);
 } events SEC(".maps");
 
-// struct {
-//     __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
-//     __uint(max_entries, 4096);           // Maximum number of entries
-//     __type(key, int);                   // Key type
-//     __type(value, int);                 // Value type
-// } shared_map SEC(".maps");
+void send_event(struct folio *folio, enum access_type type) {
+	struct event *e;
 
+	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e) {
+		// TODO
+		return;
+	}
 
+	e->folio = (unsigned long)folio;
+	e->type = type;
 
+	bpf_ringbuf_submit(e, 0);
+}
 unsigned long get_pfn_folio(struct folio *folio) {
 	unsigned long page_addr = (unsigned long)(folio + offsetof(struct folio, page));
-	unsigned long pfn = page_addr / 4096; // TODO
+	unsigned long pfn = page_addr;// / 4096; // TODO
 	return pfn;
 }
 unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
 	unsigned long page_addr = (unsigned long)(BPF_CORE_READ(bh, b_page));
-	unsigned long pfn = page_addr / 4096; // TODO
+	unsigned long pfn = page_addr;// / 4096; // TODO
 	return pfn;
 }
 
-long order_id = 0;
-static long send_event(struct folio *fol, enum event_type etyp)
-{
-    static unsigned long order_id = 0;
-    struct event *e;
-    /* reserve sample from BPF ringbuf */
-    e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-    // NOTE: I believe reservation makes updates atomic
-    // e->order_id = __sync_fetch_and_add(&order_id, 1);
-    if (!e)
-        return -1;
-
-    /* send data to user-space for post-processing */
-    e->folio_ptr = (unsigned long)fol;
-    e->etyp = etyp;
-    e->order_id = __sync_fetch_and_add(&order_id, 1);
-    bpf_ringbuf_submit(e, 0);
-    return 0;
-}
 
 SEC("kprobe/folio_mark_accessed")
 int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
@@ -65,9 +48,8 @@ int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
-	bpf_printk("folio_mark_accessed: pid = %d, pfn=%ul\n", pid, pfn);
-
-        send_event(folio, MPA);
+	send_event(folio, FMA);
+	bpf_printk("folio_mark_accessed: pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
@@ -81,9 +63,9 @@ int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *f
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
-	bpf_printk("filemap_add_folio: pid = %d, pfn=%ul\n", pid, pfn);
+	send_event(folio, FAF);
+	bpf_printk("filemap_add_folio: pid = %d, pfn=%lu\n", pid, pfn);
 
-        send_event(folio, APCL);
 	return 0;
 }
 
@@ -96,11 +78,9 @@ int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *ma
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
-	bpf_printk("KPROBE ENTRY pid = %d, pfn=%ul\n", pid, pfn);
+	send_event(folio, TEMP);
+	bpf_printk("KPROBE ENTRY pid = %d, pfn=%lu\n", pid, pfn);
 
-
-        /*WARNING: Is this the right event type?*/
-        send_event(folio, APD);
 	return 0;
 }
 
@@ -109,15 +89,14 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 {
 	pid_t pid;
 	unsigned long pfn;
+	struct folio *folio;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_buffer_head(bh);
-	bpf_printk("mark_buffer_dirty: pid = %d, pfn=%ul\n", pid, pfn);
-        // BUG: b_folio doesn't work. So I'm cheating and using b_page instead.
-	// struct folio *folio = (unsigned long)(BPF_CORE_READ(bh, b_folio));
-	struct folio *folio = (unsigned long)(BPF_CORE_READ(bh, b_page));
+	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
+	send_event(folio, MBD);
+	bpf_printk("mark_buffer_dirty: pid = %d, pfn=%lu\n", pid, pfn);
 
-        send_event(folio, MBD);
 	return 0;
 }
 
