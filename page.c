@@ -10,6 +10,11 @@
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include "page.skel.h"
+#include "page.h"
+
+struct list;
+struct list_entry;
+struct event;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -24,10 +29,6 @@ static void sig_int(int signo)
 }
 
 
-struct event {
-    uint32_t key;
-    uint32_t value;
-};
 
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
@@ -67,7 +68,7 @@ int main(int argc, char **argv)
 
 	printf("Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
 	       "to see output of the BPF programs.\n");
-        int map_fd = bpf_map__fd(skel->maps.shared_map);
+        // int map_fd = bpf_map__fd(skel->maps.shared_map);
         struct ring_buffer *rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
 
         while (!stop) {

@@ -5,86 +5,26 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 #include <assert.h>
+#include "page.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-
-struct list_entry {
-	struct list_entry *next;
-        struct list_entry *prev;
-	unsigned long pfn;
-};
-
-struct list {
-	struct list_entry *head;
-	struct list_entry *tail;
-	int hits;
-	int misses;
-};
+struct list;
+struct list_entry;
+struct event;
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 4096);
 } events SEC(".maps");
 
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
-    __uint(max_entries, 4096);           // Maximum number of entries
-    __type(key, int);                   // Key type
-    __type(value, int);                 // Value type
-} shared_map SEC(".maps");
+// struct {
+//     __uint(type, BPF_MAP_TYPE_HASH);     // Define the map type
+//     __uint(max_entries, 4096);           // Maximum number of entries
+//     __type(key, int);                   // Key type
+//     __type(value, int);                 // Value type
+// } shared_map SEC(".maps");
 
-void list_track_access(struct list *list, unsigned long pfn) {
-    struct list_entry *cur = list->head;
-    // WARNING: what to do with hits/misses?
-    while(!cur) {
-        if (cur->pfn != pfn) {
-            cur = cur->next;
-            continue;
-        }
-
-        // found
-        list->hits++;
-        return;
-    }
-
-    list->misses++;
-}
-
-void list_evict(struct list *list, int n) {
-    // NOTE: I am assuming n == pfn
-    int cnt = 0;
-    struct list_entry *cur = list->tail;
-    struct list_entry *tmp;
-
-    while (!cur && cnt < n) {
-        tmp = cur;
-        cur = cur->prev;
-        // free(tmp);
-        cnt++;
-    }
-
-    // if (cnt < n) {
-    //     // there are fewer than n list entries
-    //     assert(cur == NULL);
-    // }
-
-    cur->next = NULL;
-}
-
-void mru_update_list(struct list *list, unsigned long pfn) {
-    struct list_entry *prev_head = list->head;
-
-    // WARNING: need to create shared map for list heads?
-    // no alloc allowed in ebpf
-    // struct list_entry *new_head = malloc(sizeof(struct list_entry));
-    // struct list_entry *new_head = NULL;
-
-    // new_head->next = prev_head;
-    // if (prev_head)
-    //     prev_head->prev = new_head;
-    // list->head = new_head;
-}
 
 
 unsigned long get_pfn_folio(struct folio *folio) {
@@ -97,11 +37,6 @@ unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
 	unsigned long pfn = page_addr / 4096; // TODO
 	return pfn;
 }
-
-struct event {
-    uint32_t key;
-    uint32_t value;
-};
 
 SEC("kprobe/folio_mark_accessed")
 int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
