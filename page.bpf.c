@@ -81,6 +81,7 @@ int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *f
 	pfn = get_pfn_folio(folio);
 	bpf_printk("filemap_add_folio: pid = %d, pfn=%ul\n", pid, pfn);
 
+        send_event(folio, APCL);
 	return 0;
 }
 
@@ -95,6 +96,9 @@ int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *ma
 	pfn = get_pfn_folio(folio);
 	bpf_printk("KPROBE ENTRY pid = %d, pfn=%ul\n", pid, pfn);
 
+
+        /*WARNING: Is this the right event type?*/
+        send_event(folio, APD);
 	return 0;
 }
 
@@ -107,7 +111,11 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_buffer_head(bh);
 	bpf_printk("mark_buffer_dirty: pid = %d, pfn=%ul\n", pid, pfn);
+        // BUG: b_folio doesn't work. So I'm cheating and using b_page instead.
+	// struct folio *folio = (unsigned long)(BPF_CORE_READ(bh, b_folio));
+	struct folio *folio = (unsigned long)(BPF_CORE_READ(bh, b_page));
 
+        send_event(folio, MBD);
 	return 0;
 }
 
