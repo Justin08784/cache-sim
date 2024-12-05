@@ -84,6 +84,16 @@ proc_hit:
 	assert(count_entries(list) == list->size);
 	if (true_cnt != list->size)
 		printf("cnt: %d, list->size: %u\n", true_cnt, list->size);
+
+	// move entry to head
+	// printf("<<<\n");
+	// printf("PRE!!!\n");
+	// print_lst(list);
+	DL_DELETE(list->head, current);
+	DL_PREPEND(list->head, current);
+	// printf("POS!!!\n");
+	// print_lst(list);
+	// printf(">>>\n");
 	return;
 	// // hit, so at least 1 entry
 	// assert(list->size > 0);
@@ -119,11 +129,20 @@ void mru_update_list(struct list *list, unsigned long folio) {
 }
 
 void list_print(struct list *list) {
-	struct list_entry *current = list->head;
-	for (int i = 0; i < list->size; i++) {
-		printf("Position: %d, Folio: %lu\n", i, current->folio);
-		current = current->next;
+	// struct list_entry *current = list->head;
+	// for (int i = 0; i < list->size; i++) {
+	// 	printf("Position: %d, Folio: %lu\n", i, current->folio);
+	// 	current = current->next;
+	// }
+	// printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
+
+	struct list_entry *current;
+	int true_cnt = 0;
+	DL_FOREACH(list->head, current) {
+		printf("Position: %d, Folio: %lx\n", true_cnt, current->folio);
+		true_cnt++;
 	}
+	assert(true_cnt == list->size);
 	printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
 }
 
