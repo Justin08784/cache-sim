@@ -38,6 +38,23 @@ unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
 	return pfn;
 }
 
+static long send_event(struct folio *fol, enum event_type etyp)
+{
+    struct event *e;
+    /* reserve sample from BPF ringbuf */
+    e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (!e)
+        return -1;
+
+    e->folio_ptr = (unsigned long)fol;
+    e->etyp = etyp;
+
+    /* send data to user-space for post-processing */
+    bpf_ringbuf_submit(e, 0);
+    // __sync_fetch_and_add(&read, 1);
+    return 0;
+}
+
 SEC("kprobe/folio_mark_accessed")
 int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 {
@@ -48,18 +65,7 @@ int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 	pfn = get_pfn_folio(folio);
 	bpf_printk("folio_mark_accessed: pid = %d, pfn=%ul\n", pid, pfn);
 
-        struct event *e;
-    	/* reserve sample from BPF ringbuf */
-	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
-		return 0;
-
-	e->key = pid;
-	e->value = 42;
-
-	/* send data to user-space for post-processing */
-	bpf_ringbuf_submit(e, 0);
-	// __sync_fetch_and_add(&read, 1);
+        send_event(folio, MPA);
 
 	return 0;
 }

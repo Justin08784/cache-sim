@@ -14,9 +14,18 @@ struct list {
 	int misses;
 };
 
-struct event {
-    uint32_t key;
-    uint32_t value;
+enum event_type {
+    MPA,  // mark page access (read)
+    MBD,  // mark buffer dirty (write)
+    APCL, // access page clean (???)
+    APD,  // access page dirty (???)
 };
+
+struct event {
+    unsigned long folio_ptr;
+    enum event_type etyp;
+};
+
+
 
 #endif /* PAGE_H */
