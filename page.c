@@ -13,6 +13,7 @@
 #include "common.h"
 #include <stdlib.h>
 #include <assert.h>
+#include <utlist.h>
 
 struct list_entry {
 	struct list_entry *prev;
@@ -43,43 +44,34 @@ void list_add_entry(struct list *list, unsigned long folio) {
 	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
 
 	list_entry->folio = folio;
-	if (list->size == 0) {
-		list_entry->prev = list_entry;
-		list_entry->next = list_entry;
-		list->head = list_entry;
-		list->tail = list_entry;
-	} else {
-		list_entry->prev = list->tail;
-		list_entry->next = list->head;
-		list->head = list_entry;
-	}
+	DL_PREPEND(list->head, list_entry);
+	// if (list->size == 0) {
+	// 	list_entry->prev = list_entry;
+	// 	list_entry->next = list_entry;
+	// 	list->head = list_entry;
+	// 	list->tail = list_entry;
+	// } else {
+	// 	list_entry->prev = list->tail;
+	// 	list_entry->next = list->head;
+	// 	list->head = list_entry;
+	// }
 
 	list->size++;
 }
 
-bool count_entries(struct list *lst)
+int count_entries(struct list *lst)
 {
-	struct list_entry *head = lst->head;
-	if (!head)
-		return 0;
-	struct list_entry *cur = head;
-
-	int cnt = 1;
-	while (cur->next != head) {
-		printf("fuccc\n");
-		cur = cur->next;
-		cnt++;
-	}
+	struct list_entry *elt;
+	int cnt;
+	DL_COUNT(lst->head, elt, cnt);
 	return cnt;
 }
 
 void list_track_access(struct list *list, unsigned long folio) {
-	struct list_entry *current = list->head;
-	for (int i = 0; i < list->size; i++) {
-		if (current->folio == folio)
-			goto proc_hit;
-		current = current->next;
-	}
+	struct list_entry *current;
+	DL_SEARCH_SCALAR(list->head, current, folio, folio);
+	if (current)
+		goto proc_hit;
 // proc_miss
 	list->misses++;
 	list_add_entry(list, folio);
