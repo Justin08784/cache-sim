@@ -121,10 +121,20 @@ proc_hit:
 }
 
 void list_evict(struct list *list, int n) {
-	return;
+	struct list_entry *tail;
+	assert(list->size >= n);
+	list->size -= n;
+	while (n--) {
+		// WARNING: If this assertion fails,
+		// then we have fewer elements than n to delete.
+		assert(list->head);
+		tail = list->head->prev;
+		DL_DELETE(list->head, tail);
+	}
 }
 
-void mru_update_list(struct list *list, unsigned long folio) {
+void mru_update_list(struct list *list, unsigned long folio)
+{
 	return;
 }
 
