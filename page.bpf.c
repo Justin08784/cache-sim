@@ -16,6 +16,7 @@ struct {
 
 void send_event(struct folio *folio, enum access_type type) {
 	struct event *e;
+	struct top_key key;
 
 	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
 	if (!e) {
@@ -23,8 +24,13 @@ void send_event(struct folio *folio, enum access_type type) {
 		return;
 	}
 
+	key.pid = bpf_get_current_pid_tgid() >> 32;
+	key.uid = bpf_get_current_uid_gid();
+	bpf_get_current_comm(&key.command, 16);
+
 	e->folio = (unsigned long)folio;
 	e->type = type;
+	e->key = key;
 
 	bpf_ringbuf_submit(e, 0);
 }

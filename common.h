@@ -8,9 +8,21 @@ enum access_type {
 	MBD,
 };
 
+struct top_key {
+	unsigned int pid;
+	unsigned int uid;
+	char command[16];
+};
+
+struct value {
+	unsigned long hits;
+	unsigned long misses;
+};
+
 struct event {
 	unsigned long folio;
 	enum access_type type;
+	struct top_key key;
 };
 
 #endif

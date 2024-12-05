@@ -14,6 +14,25 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <utlist.h>
+#include <uthash.h>
+
+
+struct hash_struct {
+	struct top_key key;
+	struct value value;
+	UT_hash_handle hh;
+};
+
+struct hash_struct *top = NULL;
+
+void hash_add(struct top_key key) {
+	struct hash_struct *h = (struct hash_struct *)malloc(sizeof(struct hash_struct));
+	h->key = key;
+	h->value.hits = 0;
+	h->value.misses = 0;
+	HASH_ADD(hh, top, key, sizeof(struct top_key), h);
+}
+
 
 struct list_entry {
 	struct list_entry *prev;
@@ -77,18 +96,23 @@ int count_entries(struct list *lst)
 	return cnt;
 }
 
-void list_track_access(struct list *list, unsigned long folio) {
+void list_track_access(struct list *list, unsigned long folio, struct top_key key) {
+	struct hash_struct *p;
+	HASH_FIND(hh, top, &key, sizeof(struct top_key), p);
+
 	struct list_entry *current;
 	DL_SEARCH_SCALAR(list->head, current, folio, folio);
 	if (current)
 		goto proc_hit;
 // proc_miss
 	list->misses++;
+	p->value.misses++;
 	list_add_entry(list, folio);
 	return;
 
 proc_hit:
 	list->hits++;
+	p->value.hits++;
 
 	int true_cnt = count_entries(list);
 	assert(count_entries(list) == list->size);
@@ -163,6 +187,7 @@ void list_print(struct list *list) {
 	// }
 	// printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
 
+	/*
 	struct list_entry *current;
 	int true_cnt = 0;
 	DL_FOREACH(list->head, current) {
@@ -170,14 +195,25 @@ void list_print(struct list *list) {
 		true_cnt++;
 	}
 	assert(true_cnt == list->size);
+	*/
 	printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
 }
 
 int handle_event(void *ctx, void *data, size_t data_size) {
 	const struct event *e = data;
 
-	list_track_access(list, e->folio);
+	struct hash_struct *p = NULL;
+	struct hash_struct *tmp = NULL;
+	HASH_FIND(hh, top, &e->key, sizeof(struct top_key), p);
+	if (!p) {
+		hash_add(e->key);
+	}
+	list_track_access(list, e->folio, e->key);
 	//printf("folio: %lu, type: %d\n", e->folio, e->type);
+	//printf("key - pid: %d, uid: %d, command: %s\n", e->key.pid, e->key.uid, e->key.command);
+	HASH_ITER(hh, top, p, tmp) {
+		printf("command: %s, hits: %lu, misses: %lu\n", p->key.command, p->value.hits, p->value.misses);
+	}
 
 	return 0;
 }
