@@ -56,6 +56,23 @@ void list_add_entry(struct list *list, unsigned long folio) {
 
 	list->size++;
 }
+
+bool count_entries(struct list *lst)
+{
+	struct list_entry *head = lst->head;
+	if (!head)
+		return 0;
+	struct list_entry *cur = head;
+
+	int cnt = 1;
+	while (cur->next != head) {
+		printf("fuccc\n");
+		cur = cur->next;
+		cnt++;
+	}
+	return cnt;
+}
+
 void list_track_access(struct list *list, unsigned long folio) {
 	struct list_entry *current = list->head;
 	for (int i = 0; i < list->size; i++) {
@@ -70,24 +87,35 @@ void list_track_access(struct list *list, unsigned long folio) {
 
 proc_hit:
 	list->hits++;
-	// move entry to head
-	struct list_entry *prev = current->prev;
-	struct list_entry *next = current->next;
-	struct list_entry *old_head = list->head;
-	assert(list->size > 0);
 
-	if (prev)
-		prev->next = next;
-	if (next)
-		next->prev = prev;
-
-	assert(old_head);
-	old_head->prev = current;
-
-	assert(current);
-	current->prev = list->tail;
-	current->next = old_head;
+	int true_cnt = count_entries(list);
+	assert(count_entries(list) == list->size);
+	if (true_cnt != list->size)
+		printf("cnt: %d, list->size: %u\n", true_cnt, list->size);
 	return;
+	// // hit, so at least 1 entry
+	// assert(list->size > 0);
+	// // move entry to head
+	// struct list_entry *prev = current->prev;
+	// struct list_entry *next = current->next;
+	// struct list_entry *old_head = list->head;
+
+	// prev->next = next;
+	// next->prev = prev;
+
+	// list->head = current;
+	// old_head->prev = current;
+	// current->next = old_head;
+
+	// if (current == list->tail)
+	// 	list->tail = prev;
+	// current->prev = list->tail;
+
+	// int true_cnt = count_entries(list);
+	// assert(count_entries(list) == list->size);
+	// if (true_cnt != list->size)
+	// 	printf("cnt: %d, list->size: %u\n", true_cnt, list->size);
+	// return;
 }
 
 void list_evict(struct list *list, int n) {
