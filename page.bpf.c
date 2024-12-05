@@ -100,6 +100,17 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	return 0;
 }
 
+SEC("kretprobe/shrink_folio_list")
+int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
+{
+	pid_t pid;
+
+	pid = bpf_get_current_pid_tgid() >> 32;
+	bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+	return 0;
+}
+
+
 /*
 SEC("kretprobe/do_unlinkat")
 int BPF_KRETPROBE(do_unlinkat_exit, long ret)

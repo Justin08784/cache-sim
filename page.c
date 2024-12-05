@@ -12,6 +12,7 @@
 #include "page.skel.h"
 #include "common.h"
 #include <stdlib.h>
+#include <assert.h>
 
 struct list_entry {
 	struct list_entry *prev;
@@ -58,15 +59,35 @@ void list_add_entry(struct list *list, unsigned long folio) {
 void list_track_access(struct list *list, unsigned long folio) {
 	struct list_entry *current = list->head;
 	for (int i = 0; i < list->size; i++) {
-		if (current->folio == folio) {
-			list->hits++;
-			// TODO: move entry to front
-			return;
-		}
+		if (current->folio == folio)
+			goto proc_hit;
 		current = current->next;
 	}
+// proc_miss
 	list->misses++;
 	list_add_entry(list, folio);
+	return;
+
+proc_hit:
+	list->hits++;
+	// move entry to head
+	struct list_entry *prev = current->prev;
+	struct list_entry *next = current->next;
+	struct list_entry *old_head = list->head;
+	assert(list->size > 0);
+
+	if (prev)
+		prev->next = next;
+	if (next)
+		next->prev = prev;
+
+	assert(old_head);
+	old_head->prev = current;
+
+	assert(current);
+	current->prev = list->tail;
+	current->next = old_head;
+	return;
 }
 
 void list_evict(struct list *list, int n) {
