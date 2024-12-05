@@ -29,6 +29,13 @@ struct list {
 	int misses;
 };
 
+/*
+ * Page list, sorted by decreasing order of priorioty (i.e. head is max) 
+ * LRU: most recent at head
+ * MRU: least recent at head
+ * */
+struct list *list;
+
 struct list *list_init() {
 	struct list *list = (struct list *)malloc(sizeof(struct list));
 
@@ -40,6 +47,9 @@ struct list *list_init() {
 
 	return list;
 }
+
+/*
+ * Inserts new el to list in LRU order. */
 void list_add_entry(struct list *list, unsigned long folio) {
 	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
 
@@ -133,8 +143,15 @@ void list_evict(struct list *list, int n) {
 	}
 }
 
+/*
+ * This is the counterpart of list_add_entry for MRU. */
 void mru_update_list(struct list *list, unsigned long folio)
 {
+	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
+
+	list_entry->folio = folio;
+	DL_APPEND(list->head, list_entry);
+	list->size++;
 	return;
 }
 
@@ -156,7 +173,6 @@ void list_print(struct list *list) {
 	printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
 }
 
-struct list *list;
 int handle_event(void *ctx, void *data, size_t data_size) {
 	const struct event *e = data;
 
