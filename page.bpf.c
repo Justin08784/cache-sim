@@ -79,7 +79,7 @@ int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *ma
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
 	send_event(folio, TEMP);
-	bpf_printk("KPROBE ENTRY pid = %d, pfn=%lu\n", pid, pfn);
+	bpf_printk("__folio_mark_dirty pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
