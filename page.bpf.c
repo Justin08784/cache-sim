@@ -11,7 +11,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024 /* 256 KB */);
+	__uint(max_entries, 1200 * 1024 /* 1200 KB */);
 } events SEC(".maps");
 
 void send_event(struct folio *folio, enum access_type type) {
@@ -21,6 +21,7 @@ void send_event(struct folio *folio, enum access_type type) {
 	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
 	if (!e) {
 		// TODO
+		bpf_printk("bpf_ringbuf_reserve failed\n");
 		return;
 	}
 
@@ -55,7 +56,7 @@ int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
 	send_event(folio, FMA);
-	bpf_printk("folio_mark_accessed: pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("folio_mark_accessed: pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
@@ -70,7 +71,7 @@ int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *f
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
 	send_event(folio, FAF);
-	bpf_printk("filemap_add_folio: pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("filemap_add_folio: pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
@@ -85,7 +86,7 @@ int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *ma
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
 	send_event(folio, TEMP);
-	bpf_printk("__folio_mark_dirty pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("__folio_mark_dirty pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
@@ -101,7 +102,7 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	pfn = get_pfn_buffer_head(bh);
 	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
 	send_event(folio, MBD);
-	bpf_printk("mark_buffer_dirty: pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("mark_buffer_dirty: pid = %d, pfn=%lu\n", pid, pfn);
 
 	return 0;
 }
@@ -112,7 +113,7 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+	//bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
 	return 0;
 }
 

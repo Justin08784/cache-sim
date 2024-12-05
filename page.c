@@ -28,8 +28,10 @@ struct hash_struct *top = NULL;
 void hash_add(struct top_key key) {
 	struct hash_struct *h = (struct hash_struct *)malloc(sizeof(struct hash_struct));
 	h->key = key;
-	h->value.hits = 0;
-	h->value.misses = 0;
+	h->value.real_hits = 0;
+	h->value.real_misses = 0;
+	h->value.sim_hits = 0;
+	h->value.sim_misses = 0;
 	HASH_ADD(hh, top, key, sizeof(struct top_key), h);
 }
 
@@ -96,9 +98,19 @@ int count_entries(struct list *lst)
 	return cnt;
 }
 
-void list_track_access(struct list *list, unsigned long folio, struct top_key key) {
+void list_track_access(struct list *list, unsigned long folio, struct top_key key, enum access_type type) {
 	struct hash_struct *p;
 	HASH_FIND(hh, top, &key, sizeof(struct top_key), p);
+	switch (type) {
+		case FMA:
+			p->value.real_hits++;
+		case FAF:
+			p->value.real_misses++;
+		case TEMP:
+			p->value.real_misses++;
+		case MBD:
+			p->value.real_hits++;
+	}
 
 	struct list_entry *current;
 	DL_SEARCH_SCALAR(list->head, current, folio, folio);
@@ -106,13 +118,13 @@ void list_track_access(struct list *list, unsigned long folio, struct top_key ke
 		goto proc_hit;
 // proc_miss
 	list->misses++;
-	p->value.misses++;
+	p->value.sim_misses++;
 	list_add_entry(list, folio);
 	return;
 
 proc_hit:
 	list->hits++;
-	p->value.hits++;
+	p->value.sim_hits++;
 
 	int true_cnt = count_entries(list);
 	assert(count_entries(list) == list->size);
@@ -203,17 +215,14 @@ int handle_event(void *ctx, void *data, size_t data_size) {
 	const struct event *e = data;
 
 	struct hash_struct *p = NULL;
-	struct hash_struct *tmp = NULL;
 	HASH_FIND(hh, top, &e->key, sizeof(struct top_key), p);
 	if (!p) {
 		hash_add(e->key);
 	}
-	list_track_access(list, e->folio, e->key);
+
+	list_track_access(list, e->folio, e->key, e->type);
 	//printf("folio: %lu, type: %d\n", e->folio, e->type);
 	//printf("key - pid: %d, uid: %d, command: %s\n", e->key.pid, e->key.uid, e->key.command);
-	HASH_ITER(hh, top, p, tmp) {
-		printf("command: %s, hits: %lu, misses: %lu\n", p->key.command, p->value.hits, p->value.misses);
-	}
 
 	return 0;
 }
@@ -284,6 +293,16 @@ int main(int argc, char **argv)
 		}
 
 		list_print(list);
+	}
+
+	struct hash_struct *p = NULL;
+	struct hash_struct *tmp = NULL;
+	printf("\n");
+	printf("command\t\ttreal hit percentage\t\tsim hit percentage\n");
+	HASH_ITER(hh, top, p, tmp) {
+		float real_hit_percent = 100.0 * ((float)p->value.real_hits / (float)(p->value.real_hits + p->value.real_misses));
+		float sim_hit_percent = 100.0 * ((float)p->value.sim_hits / (float)(p->value.sim_hits + p->value.sim_misses));
+		printf("%s\t\t%f\t\t%f\n", p->key.command, real_hit_percent, sim_hit_percent);
 	}
 
 cleanup:

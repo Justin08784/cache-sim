@@ -15,8 +15,10 @@ struct top_key {
 };
 
 struct value {
-	unsigned long hits;
-	unsigned long misses;
+	unsigned long real_hits;
+	unsigned long real_misses;
+	unsigned long sim_hits;
+	unsigned long sim_misses;
 };
 
 struct event {
