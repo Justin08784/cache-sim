@@ -298,7 +298,7 @@ int main(int argc, char **argv)
 	struct hash_struct *p = NULL;
 	struct hash_struct *tmp = NULL;
 	printf("\n");
-	printf("command\t\ttreal hit percentage\t\tsim hit percentage\n");
+	printf("command\t\treal hit percentage\t\tsim hit percentage\n");
 	HASH_ITER(hh, top, p, tmp) {
 		float real_hit_percent = 100.0 * ((float)p->value.real_hits / (float)(p->value.real_hits + p->value.real_misses));
 		float sim_hit_percent = 100.0 * ((float)p->value.sim_hits / (float)(p->value.sim_hits + p->value.sim_misses));
