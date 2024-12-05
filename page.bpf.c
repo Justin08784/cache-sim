@@ -4,7 +4,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include <assert.h>
 #include "page.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
@@ -15,7 +14,7 @@ struct event;
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 4096);
+    __uint(max_entries, 1024 * sizeof(struct event));
 } events SEC(".maps");
 
 // struct {
@@ -38,20 +37,23 @@ unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
 	return pfn;
 }
 
+long order_id = 0;
 static long send_event(struct folio *fol, enum event_type etyp)
 {
+    static unsigned long order_id = 0;
     struct event *e;
     /* reserve sample from BPF ringbuf */
     e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    // NOTE: I believe reservation makes updates atomic
+    // e->order_id = __sync_fetch_and_add(&order_id, 1);
     if (!e)
         return -1;
 
+    /* send data to user-space for post-processing */
     e->folio_ptr = (unsigned long)fol;
     e->etyp = etyp;
-
-    /* send data to user-space for post-processing */
+    e->order_id = __sync_fetch_and_add(&order_id, 1);
     bpf_ringbuf_submit(e, 0);
-    // __sync_fetch_and_add(&read, 1);
     return 0;
 }
 

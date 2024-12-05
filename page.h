@@ -22,6 +22,7 @@ enum event_type {
 };
 
 struct event {
+    unsigned long order_id;
     unsigned long folio_ptr;
     enum event_type etyp;
 };

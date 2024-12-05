@@ -34,7 +34,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 {
 // void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz) {
     struct event *e = data;
-    printf("Folio Addr: %lx, Type: %d\n", e->folio_ptr, e->etyp);
+    printf("(%lu) Folio Addr: %lx, Type: %d\n", e->order_id, e->folio_ptr, e->etyp);
     return -1;
 }
 
