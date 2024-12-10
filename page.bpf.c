@@ -70,6 +70,9 @@ int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *f
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	pfn = get_pfn_folio(folio);
+	unsigned int nr_pages = (unsigned int)(BPF_CORE_READ(folio, _folio_nr_pages));
+	nr_pages = 1L << (nr_pages & 0xff);
+	bpf_printk("filemap_add_folio: pid = %d, nr_pages=%u\n", pid, nr_pages);
 	send_event(folio, FAF);
 	//bpf_printk("filemap_add_folio: pid = %d, pfn=%lu\n", pid, pfn);
 
@@ -114,6 +117,7 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 
 	pid = bpf_get_current_pid_tgid() >> 32;
 	//bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+	send_event((void *)ret, EVICT);
 	return 0;
 }
 

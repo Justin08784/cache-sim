@@ -6,6 +6,7 @@ enum access_type {
 	FAF,
 	TEMP,
 	MBD,
+	EVICT,
 };
 
 struct top_key {

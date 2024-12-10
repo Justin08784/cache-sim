@@ -50,6 +50,27 @@ struct list {
 	int misses;
 };
 
+void list_evict(struct list *list, int n) {
+	printf("num_evict: %d, list size: %d\n", n, list->size);
+	struct list_entry *tail;
+	// BUG: assertion fails
+	// Case 1: process was running before sudo ./page. Naturally
+	// not all of its pages would be tracked.
+	// Case 2: EVEN processes that started after sudo ./page (e.g.
+	// sudo stress ...) fail this assertion. Theory: we need to
+	// account for struct folio with multiple pages.
+	assert(list->size >= n);
+	list->size -= n;
+	while (n--) {
+		// WARNING: If this assertion fails,
+		// then we have fewer elements than n to delete.
+		assert(list->head);
+		tail = list->head->prev;
+		DL_DELETE(list->head, tail);
+	}
+}
+
+
 /*
  * Page list, sorted by decreasing order of priorioty (i.e. head is max) 
  * LRU: most recent at head
@@ -104,12 +125,16 @@ void list_track_access(struct list *list, unsigned long folio, struct top_key ke
 	switch (type) {
 		case FMA:
 			p->value.real_hits++;
+			break;
 		case FAF:
 			p->value.real_misses++;
+			break;
 		case TEMP:
 			p->value.real_misses++;
+			break;
 		case MBD:
 			p->value.real_hits++;
+			break;
 	}
 
 	struct list_entry *current;
@@ -166,19 +191,6 @@ proc_hit:
 	// return;
 }
 
-void list_evict(struct list *list, int n) {
-	struct list_entry *tail;
-	assert(list->size >= n);
-	list->size -= n;
-	while (n--) {
-		// WARNING: If this assertion fails,
-		// then we have fewer elements than n to delete.
-		assert(list->head);
-		tail = list->head->prev;
-		DL_DELETE(list->head, tail);
-	}
-}
-
 /*
  * This is the counterpart of list_add_entry for MRU. */
 void mru_update_list(struct list *list, unsigned long folio)
@@ -218,6 +230,19 @@ int handle_event(void *ctx, void *data, size_t data_size) {
 	HASH_FIND(hh, top, &e->key, sizeof(struct top_key), p);
 	if (!p) {
 		hash_add(e->key);
+	}
+
+	if (e->type == EVICT) {
+		printf("%s ", e->key.command);
+		if (strncmp("stress", e->key.command, strlen("stress"))) {
+			printf(" NOT EQUAL ");
+			return;
+		} else {
+			printf(" EQUAL ");
+		}
+		printf("pid: %d ", e->key.pid);
+		list_evict(list, (unsigned int)e->folio);
+		return;
 	}
 
 	list_track_access(list, e->folio, e->key, e->type);
