@@ -1,3 +1,6 @@
 *.o
 .output
 page
+*.log
+*.out
+*.exe

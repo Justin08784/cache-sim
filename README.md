@@ -1,8 +1,10 @@
 # Cache simulator for EECS 582
 
 
-## Installing & running
+## Installing
 
 ```bash
 git submodule update --init --recursive
 make page
+sudo ./page
+```
