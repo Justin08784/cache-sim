@@ -1,6 +1,8 @@
 *.o
 .output
-page
 *.log
 *.out
 *.exe
+profiler
+simulator
+page.log

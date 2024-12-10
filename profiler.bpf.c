@@ -84,7 +84,7 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
 	send_event(folio, MBD);
-	send_event((struct folio *)30, SFL); // TODO: remove
+	//send_event((struct folio *)30, SFL); // TODO: remove
 	//bpf_printk("mark_buffer_dirty: pid = %d\n", pid);
 
 	return 0;
@@ -96,7 +96,7 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	send_event((struct folio *)3, SFL); //TODO FIX
+	send_event((struct folio *)ret, SFL);
 	bpf_printk("shrink_folio_list: pid = %d, ret = %ld\n", pid, ret);
 	return 0;
 }
