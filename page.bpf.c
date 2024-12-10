@@ -11,12 +11,12 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 1200 * 1024 /* 1200 KB */);
+	__uint(max_entries, 512 * 1024 /* 512 KB */);
 } events SEC(".maps");
 
 void send_event(struct folio *folio, enum access_type type) {
 	struct event *e;
-	struct top_key key;
+	struct task_key key;
 
 	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
 	if (!e) {
@@ -25,8 +25,8 @@ void send_event(struct folio *folio, enum access_type type) {
 		return;
 	}
 
-	key.pid = bpf_get_current_pid_tgid() >> 32;
 	key.uid = bpf_get_current_uid_gid();
+	key.pid = bpf_get_current_pid_tgid() >> 32;
 	bpf_get_current_comm(&key.command, 16);
 
 	e->folio = (unsigned long)folio;
@@ -35,28 +35,16 @@ void send_event(struct folio *folio, enum access_type type) {
 
 	bpf_ringbuf_submit(e, 0);
 }
-unsigned long get_pfn_folio(struct folio *folio) {
-	unsigned long page_addr = (unsigned long)(folio + offsetof(struct folio, page));
-	unsigned long pfn = page_addr;// / 4096; // TODO
-	return pfn;
-}
-unsigned long get_pfn_buffer_head(struct buffer_head *bh) {
-	unsigned long page_addr = (unsigned long)(BPF_CORE_READ(bh, b_page));
-	unsigned long pfn = page_addr;// / 4096; // TODO
-	return pfn;
-}
 
 
 SEC("kprobe/folio_mark_accessed")
 int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 {
 	pid_t pid;
-	unsigned long pfn;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	pfn = get_pfn_folio(folio);
 	send_event(folio, FMA);
-	//bpf_printk("folio_mark_accessed: pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("folio_mark_accessed: pid = %d\n", pid);
 
 	return 0;
 }
@@ -66,12 +54,10 @@ SEC("kprobe/filemap_add_folio")
 int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *folio, pgoff_t index, gfp_t gfp)
 {
 	pid_t pid;
-	unsigned long pfn;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	pfn = get_pfn_folio(folio);
 	send_event(folio, FAF);
-	//bpf_printk("filemap_add_folio: pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("filemap_add_folio: pid = %d\n", pid);
 
 	return 0;
 }
@@ -81,12 +67,10 @@ SEC("kprobe/__folio_mark_dirty")
 int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *mapping)
 {
 	pid_t pid;
-	unsigned long pfn;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	pfn = get_pfn_folio(folio);
 	send_event(folio, TEMP);
-	//bpf_printk("__folio_mark_dirty pid = %d, pfn=%lu\n", pid, pfn);
+	//bpf_printk("__folio_mark_dirty: pid = %d\n", pid);
 
 	return 0;
 }
@@ -95,14 +79,13 @@ SEC("kprobe/mark_buffer_dirty")
 int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 {
 	pid_t pid;
-	unsigned long pfn;
 	struct folio *folio;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	pfn = get_pfn_buffer_head(bh);
 	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
 	send_event(folio, MBD);
-	//bpf_printk("mark_buffer_dirty: pid = %d, pfn=%lu\n", pid, pfn);
+	send_event((struct folio *)30, SFL); // TODO: remove
+	//bpf_printk("mark_buffer_dirty: pid = %d\n", pid);
 
 	return 0;
 }
@@ -113,19 +96,7 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	//bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+	send_event((struct folio *)3, SFL); //TODO FIX
+	bpf_printk("shrink_folio_list: pid = %d, ret = %ld\n", pid, ret);
 	return 0;
 }
-
-
-/*
-SEC("kretprobe/do_unlinkat")
-int BPF_KRETPROBE(do_unlinkat_exit, long ret)
-{
-	pid_t pid;
-
-	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
-	return 0;
-}
-*/

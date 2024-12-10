@@ -6,25 +6,22 @@ enum access_type {
 	FAF,
 	TEMP,
 	MBD,
+	SFL,
 };
 
-struct top_key {
-	unsigned int pid;
+struct task_key {
 	unsigned int uid;
+	unsigned int pid;
 	char command[16];
 };
 
-struct value {
-	unsigned long real_hits;
-	unsigned long real_misses;
-	unsigned long sim_hits;
-	unsigned long sim_misses;
-};
-
 struct event {
-	unsigned long folio;
+	union {
+		unsigned long folio;
+		unsigned long num_evicted;
+	};
 	enum access_type type;
-	struct top_key key;
+	struct task_key key;
 };
 
 #endif

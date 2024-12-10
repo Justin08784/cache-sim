@@ -17,212 +17,160 @@
 #include <uthash.h>
 
 
-struct hash_struct {
-	struct top_key key;
-	struct value value;
-	UT_hash_handle hh;
-};
-
-struct hash_struct *top = NULL;
-
-void hash_add(struct top_key key) {
-	struct hash_struct *h = (struct hash_struct *)malloc(sizeof(struct hash_struct));
-	h->key = key;
-	h->value.real_hits = 0;
-	h->value.real_misses = 0;
-	h->value.sim_hits = 0;
-	h->value.sim_misses = 0;
-	HASH_ADD(hh, top, key, sizeof(struct top_key), h);
-}
-
-
 struct list_entry {
 	struct list_entry *prev;
 	struct list_entry *next;
 	unsigned long folio;
 };
 
-struct list {
-	struct list_entry *head;
-	struct list_entry *tail;
-	int size;
+struct task_stats_entry {
+	struct task_key key;
+	int hits;
+	int misses;
+	UT_hash_handle hh;
+};
+
+struct policy_simulation {
+	struct list_entry *list_head;
+	struct task_stats_entry *task_stats;
+	void (*hit_update)(struct policy_simulation *, struct list_entry *);
+	void (*miss_update)(struct policy_simulation *, unsigned long);
 	int hits;
 	int misses;
 };
 
-/*
- * Page list, sorted by decreasing order of priorioty (i.e. head is max) 
- * LRU: most recent at head
- * MRU: least recent at head
- * */
-struct list *list;
+struct task_stats_entry *linux_task_stats = NULL;
+struct policy_simulation *ps;
+FILE *log_file;
 
-struct list *list_init() {
-	struct list *list = (struct list *)malloc(sizeof(struct list));
+struct policy_simulation *policy_simulation_init(void (*hit_update)(struct policy_simulation *, struct list_entry *), void (*miss_update)(struct policy_simulation *, unsigned long)) {
+	struct policy_simulation *ps = (struct policy_simulation *)malloc(sizeof(struct policy_simulation));
 
-	list->head = NULL;
-	list->tail = NULL;
-	list->size = 0;
-	list->hits = 0;
-	list->misses = 0;
+	// uthash requires its lists and hash tables to be initialized with NULL
+	ps->list_head = NULL;
+	ps->task_stats = NULL;
+	ps->hit_update = hit_update;
+	ps->miss_update = miss_update;
+	ps->hits = 0;
+	ps->misses = 0;
 
-	return list;
+	return ps;
 }
 
-/*
- * Inserts new el to list in LRU order. */
-void list_add_entry(struct list *list, unsigned long folio) {
-	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
-
-	list_entry->folio = folio;
-	DL_PREPEND(list->head, list_entry);
-	// if (list->size == 0) {
-	// 	list_entry->prev = list_entry;
-	// 	list_entry->next = list_entry;
-	// 	list->head = list_entry;
-	// 	list->tail = list_entry;
-	// } else {
-	// 	list_entry->prev = list->tail;
-	// 	list_entry->next = list->head;
-	// 	list->head = list_entry;
-	// }
-
-	list->size++;
-}
-
-int count_entries(struct list *lst)
-{
-	struct list_entry *elt;
-	int cnt;
-	DL_COUNT(lst->head, elt, cnt);
-	return cnt;
-}
-
-void list_track_access(struct list *list, unsigned long folio, struct top_key key, enum access_type type) {
-	struct hash_struct *p;
-	HASH_FIND(hh, top, &key, sizeof(struct top_key), p);
-	switch (type) {
+void policy_simulation_track_access(struct policy_simulation *ps, const struct event *e) {
+	struct task_stats_entry *tse = NULL;
+	HASH_FIND(hh, linux_task_stats, &e->key, sizeof(struct task_key), tse);
+	if (!tse) {
+		tse = (struct task_stats_entry *)malloc(sizeof(struct task_stats_entry));
+		tse->key = e->key;
+		tse->hits = 0;
+		tse->misses = 0;
+		HASH_ADD(hh, linux_task_stats, key, sizeof(struct task_key), tse);
+	}
+	switch (e->type) {
 		case FMA:
-			p->value.real_hits++;
+			tse->hits++;
+			break;
 		case FAF:
-			p->value.real_misses++;
+			tse->misses++;
+			break;
 		case TEMP:
-			p->value.real_misses++;
+			tse->misses++;
+			break;
 		case MBD:
-			p->value.real_hits++;
+			tse->hits++;
+			break;
+		default:
+			return;
+			break;
 	}
 
-	struct list_entry *current;
-	DL_SEARCH_SCALAR(list->head, current, folio, folio);
-	if (current)
-		goto proc_hit;
-// proc_miss
-	list->misses++;
-	p->value.sim_misses++;
-	list_add_entry(list, folio);
-	return;
+	HASH_FIND(hh, ps->task_stats, &e->key, sizeof(struct task_key), tse);
+	if (!tse) {
+		tse = (struct task_stats_entry *)malloc(sizeof(struct task_stats_entry));
+		tse->key = e->key;
+		tse->hits = 0;
+		tse->misses = 0;
+		HASH_ADD(hh, ps->task_stats, key, sizeof(struct task_key), tse);
+	}
 
-proc_hit:
-	list->hits++;
-	p->value.sim_hits++;
-
-	int true_cnt = count_entries(list);
-	assert(count_entries(list) == list->size);
-	if (true_cnt != list->size)
-		printf("cnt: %d, list->size: %u\n", true_cnt, list->size);
-
-	// move entry to head
-	// printf("<<<\n");
-	// printf("PRE!!!\n");
-	// print_lst(list);
-	DL_DELETE(list->head, current);
-	DL_PREPEND(list->head, current);
-	// printf("POS!!!\n");
-	// print_lst(list);
-	// printf(">>>\n");
-	return;
-	// // hit, so at least 1 entry
-	// assert(list->size > 0);
-	// // move entry to head
-	// struct list_entry *prev = current->prev;
-	// struct list_entry *next = current->next;
-	// struct list_entry *old_head = list->head;
-
-	// prev->next = next;
-	// next->prev = prev;
-
-	// list->head = current;
-	// old_head->prev = current;
-	// current->next = old_head;
-
-	// if (current == list->tail)
-	// 	list->tail = prev;
-	// current->prev = list->tail;
-
-	// int true_cnt = count_entries(list);
-	// assert(count_entries(list) == list->size);
-	// if (true_cnt != list->size)
-	// 	printf("cnt: %d, list->size: %u\n", true_cnt, list->size);
-	// return;
-}
-
-void list_evict(struct list *list, int n) {
-	struct list_entry *tail;
-	assert(list->size >= n);
-	list->size -= n;
-	while (n--) {
-		// WARNING: If this assertion fails,
-		// then we have fewer elements than n to delete.
-		assert(list->head);
-		tail = list->head->prev;
-		DL_DELETE(list->head, tail);
+	struct list_entry *entry = NULL;
+	DL_SEARCH_SCALAR(ps->list_head, entry, folio, e->folio);
+	if (entry) {
+		ps->hits++;
+		tse->hits++;
+		(*ps->hit_update)(ps, entry);
+	} else {
+		ps->misses++;
+		tse->misses++;
+		(*ps->miss_update)(ps, e->folio);
 	}
 }
 
-/*
- * This is the counterpart of list_add_entry for MRU. */
-void mru_update_list(struct list *list, unsigned long folio)
-{
-	struct list_entry *list_entry = (struct list_entry *)malloc(sizeof(struct list_entry));
 
-	list_entry->folio = folio;
-	DL_APPEND(list->head, list_entry);
-	list->size++;
-	return;
+int policy_simulation_size(struct policy_simulation *ps) {
+	struct list_entry *entry;
+	int size;
+	DL_COUNT(ps->list_head, entry, size);
+	return size;
 }
 
-void list_print(struct list *list) {
-	// struct list_entry *current = list->head;
-	// for (int i = 0; i < list->size; i++) {
-	// 	printf("Position: %d, Folio: %lu\n", i, current->folio);
-	// 	current = current->next;
-	// }
-	// printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
+void policy_simulation_evict(struct policy_simulation *ps, int num_to_evict) {
+	printf("TODO: fix policy_simulation_evict\n");
+	int size = policy_simulation_size(ps);
+	printf("Size: %d, num_to_evict: %d\n", size, num_to_evict);
+	if (num_to_evict >= size) return;
+	while(num_to_evict--) {
+		struct list_entry *del_entry = ps->list_head;
+		DL_DELETE(ps->list_head, del_entry);
+		/*
+		if (del_entry->payload) {
+			free(del_entry->payload);
+		}
+		*/
+		free(del_entry);
+	}
+}
 
+void policy_simulation_print(struct policy_simulation *ps) {
 	/*
-	struct list_entry *current;
-	int true_cnt = 0;
-	DL_FOREACH(list->head, current) {
-		printf("Position: %d, Folio: %lx\n", true_cnt, current->folio);
-		true_cnt++;
+	struct list_entry *entry;
+	int position = 0;
+	DL_FOREACH(ps->list_head, entry) {
+		printf("Position: %d, Folio: %lu\n", position++, entry->folio);
 	}
-	assert(true_cnt == list->size);
 	*/
-	printf("Size: %d, Hits: %d, Misses: %d\n", list->size, list->hits, list->misses);
+
+	printf("Size: %d, Hits: %d, Misses: %d\n", policy_simulation_size(ps), ps->hits, ps->misses);
 }
+
+void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {
+	// Remove hit_entry from the list
+	DL_DELETE(ps->list_head, hit_entry);
+	// Make hit_entry the new head of the list
+	DL_PREPEND(ps->list_head, hit_entry);
+}
+
+void mru_miss_update(struct policy_simulation *ps, unsigned long folio) {
+	struct list_entry *entry = (struct list_entry *)malloc(sizeof(struct list_entry));
+	entry->folio = folio;
+
+	// Make entry the new head of the list
+	DL_PREPEND(ps->list_head, entry);
+}
+
 
 int handle_event(void *ctx, void *data, size_t data_size) {
 	const struct event *e = data;
 
-	struct hash_struct *p = NULL;
-	HASH_FIND(hh, top, &e->key, sizeof(struct top_key), p);
-	if (!p) {
-		hash_add(e->key);
+	fprintf(log_file, "%lu,%d,%d,%d,%s\n", e->folio, e->type, e->key.uid, e->key.pid, e->key.command);
+
+	if (e->type == SFL) {
+		policy_simulation_evict(ps, e->num_evicted);
+		return 0;
 	}
 
-	list_track_access(list, e->folio, e->key, e->type);
-	//printf("folio: %lu, type: %d\n", e->folio, e->type);
-	//printf("key - pid: %d, uid: %d, command: %s\n", e->key.pid, e->key.uid, e->key.command);
+	policy_simulation_track_access(ps, e);
 
 	return 0;
 }
@@ -278,7 +226,8 @@ int main(int argc, char **argv)
 	printf("Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
 	       "to see output of the BPF programs.\n");
 
-	list = list_init();
+	ps = policy_simulation_init(&mru_hit_update, &mru_miss_update);
+	log_file = fopen("page.log", "w");
 	while (!stop) {
 		const int timeout_ms = 100;
 		err = ring_buffer__poll(rb, timeout_ms);
@@ -292,17 +241,23 @@ int main(int argc, char **argv)
 			break;
 		}
 
-		list_print(list);
+		policy_simulation_print(ps);
 	}
+	fclose(log_file);
 
-	struct hash_struct *p = NULL;
-	struct hash_struct *tmp = NULL;
+	struct task_stats_entry *tse = NULL;
+	struct task_stats_entry *tmp = NULL;
 	printf("\n");
-	printf("command\t\treal hit percentage\t\tsim hit percentage\n");
-	HASH_ITER(hh, top, p, tmp) {
-		float real_hit_percent = 100.0 * ((float)p->value.real_hits / (float)(p->value.real_hits + p->value.real_misses));
-		float sim_hit_percent = 100.0 * ((float)p->value.sim_hits / (float)(p->value.sim_hits + p->value.sim_misses));
-		printf("%s\t\t%f\t\t%f\n", p->key.command, real_hit_percent, sim_hit_percent);
+	printf("%-16s    %-16s    %-16s\n", "Command", "Real Hit %", "Sim Hit %");
+	HASH_ITER(hh, linux_task_stats, tse, tmp) {
+		float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+
+		struct task_key key = tse->key;
+		HASH_FIND(hh, ps->task_stats, &key, sizeof(struct task_key), tse);
+		float sim_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+
+		//if (p->value.real_hits + p->value.sim_hits > 100) {
+		printf("%-16s    %-16.2f    %-16.2f\n", tse->key.command, real_hit_percent, sim_hit_percent);
 	}
 
 cleanup:
