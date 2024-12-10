@@ -15,7 +15,7 @@ int main() {
 
 	struct event e;
 	char type_str[16];
-	while (fscanf(log_file, "%lu,%d,%d,%d,%s\n", &e.folio, &e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) { // TODO
+	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, &e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) { // TODO
 		switch (e.type) {
 			case FMA:
 				strcpy(type_str, "FMA");
@@ -36,19 +36,19 @@ int main() {
 
 		switch (e.type) {
 			case SFL:
-				printf("UID: %d, PID: %d, COMMAND: %s, TYPE: %s, NUM_EVICTED: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
+				printf("UID: %d | PID: %d | COMMAND: %s | TYPE: %s | NUM_EVICTED: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
 				break;
 			default:
-				printf("UID: %d, PID: %d, COMMAND: %s, TYPE: %s, FOLIO: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
+				printf("UID: %d | PID: %d | COMMAND: %s | TYPE: %s | FOLIO: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
 				break;
 		}
 
 
 		if (e.type == SFL) {
 			policy_simulation_evict(ps, e.num_evicted);
-			return 0;
+		} else {
+			policy_simulation_track_access(ps, &e);
 		}
-		policy_simulation_track_access(ps, &e);
 		policy_simulation_print(ps);
 	}
 
