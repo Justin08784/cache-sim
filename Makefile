@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 OUTPUT := .output
 CLANG ?= clang
-LIBBPF_SRC := $(abspath ./libbpf-bootstrap/libbpf/src)
-BPFTOOL_SRC := $(abspath ./libbpf-bootstrap/bpftool/src)
+BOOTSTRAP_BASE := $(abspath ./libbpf-bootstrap/)
+LIBBPF_BASE := $(abspath $(BOOTSTRAP_BASE)/libbpf/)
+LIBBPF_SRC := $(abspath $(LIBBPF_BASE)/src)
+BPFTOOL_SRC := $(abspath $(BOOTSTRAP_BASE)/bpftool/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 BPFTOOL_OUTPUT ?= $(abspath $(OUTPUT)/bpftool)
 BPFTOOL ?= $(BPFTOOL_OUTPUT)/bootstrap/bpftool
@@ -23,7 +25,7 @@ VMLINUX := ./libbpf-bootstrap/vmlinux.h/include/$(ARCH)/vmlinux.h # TODO: fix th
 # outdated
 
 LIBUTHASH = $(abspath ./uthash/include)
-INCLUDES := -I$(OUTPUT) -I./libbpf-bootstrap/libbpf/include/uapi -I$(dir $(VMLINUX)) -I$(LIBBLAZESYM_INC) -I$(LIBUTHASH)
+INCLUDES := -I$(OUTPUT) -I$(LIBBPF_BASE)include/uapi -I$(dir $(VMLINUX)) -I$(LIBBLAZESYM_INC) -I$(LIBUTHASH)
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
