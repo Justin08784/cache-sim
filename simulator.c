@@ -29,8 +29,7 @@ int main() {
 
 	struct event e;
 	char type_str[16];
-
-	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, (int *)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) { // TODO
+	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, (int*)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) {
 		switch (e.type) {
 			case FMA:
 				strcpy(type_str, "FMA");
@@ -104,11 +103,29 @@ int main() {
 	struct task_stats_entry *tse = NULL;
 	struct linux_task_stats_entry *tmp = NULL;
 	printf("\n");
-	printf("%-16s    %-16s    %-16s\n", "Command", "Real Hit %", "Sim Hit %");
-	//HASH_ITER(hh, linux_task_stats, tse, tmp) {
-	HASH_ITER(hh, ps->task_stats, tse, tmp) {
-		float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
-		struct task_key key = tse->key;
+	printf("%-16s    %-16s    %-16s    %-16s\n", "Command", "Real Hit %", "Sim Hit %", "Hits + Misses");
+	//HASH_ITER(hh, ps->task_stats, tse, tmp) {
+	HASH_ITER(hh, linux_task_stats, ltse, tmp) {
+		/*
+		unsigned long total = ltse->fma + ltse->faf + ltse->fmd + ltse->mbd;
+		float real_hit_percent = 100.0 * ((float)(ltse->fma + ltse->faf) / (float)(total));
+		*/
+		float total = (float)ltse->fma - (float)ltse->mbd;
+		float misses = (float)ltse->faf - (float)ltse->fmd;
+		if (misses < 0)
+			misses = 0;
+		if (total < 0)
+			total = 0;
+		float hits = total - misses;
+		if (hits < 0) {
+			misses = total;
+			hits = 0;
+		}
+		float real_hit_percent = 100.0 * (hits / total);
+		//float real_hit_percent = 100.0 * (hits / accesses);
+		//float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+
+		struct task_key key = ltse->key;
 		HASH_FIND(hh, ps->task_stats, &key, sizeof(struct task_key), tse);
 		float sim_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
 
