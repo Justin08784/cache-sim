@@ -95,13 +95,12 @@ int policy_simulation_size(struct policy_simulation *ps) {
 }
 
 void policy_simulation_print(struct policy_simulation *ps) {
-	/*
+
 	struct list_entry *entry;
 	int position = 0;
 	DL_FOREACH(ps->list_head, entry) {
 		printf("Position: %d, Folio: %lu\n", position++, entry->folio);
 	}
-	*/
 
 	printf("Size: %d, Hits: %lu, Misses: %lu\n", policy_simulation_size(ps), ps->hits, ps->misses);
 }
@@ -118,7 +117,7 @@ void mru_miss_update(struct policy_simulation *ps, unsigned long folio) {
 	entry->folio = folio;
 	entry->payload = NULL;
 
-	// Make entry the new head of the list
+	// Make entry the new head of the list -- preserves sort
 	DL_PREPEND(ps->list_head, entry);
 }
 
@@ -129,7 +128,7 @@ int lfu_payload_cmp(void *left, void *right) {
 	if (l < r) {
 		return -1;
 	} else if(l == r) {
-		return 0;
+		return -1; // so that we don't fall back to MRU in degenerate case (all 0 refs)
 	} else {
 		return 1;
 	}
@@ -153,7 +152,9 @@ void lfu_miss_update(struct policy_simulation *ps, unsigned long folio) {
 	entry->folio = folio;
 	entry->payload = malloc(sizeof(unsigned long));
 	*(unsigned long *)entry->payload = 0;
+    struct list_entry* loc_for_push;
+    DL_LOWER_BOUND(ps->list_head, loc_for_push, entry, lfu_payload_cmp);
 
-	// Make entry the new head of the list
-	DL_PREPEND(ps->list_head, entry);
+    // Make entry the new head of the list -- preserve's sort
+	DL_APPEND(loc_for_push, entry);
 }
