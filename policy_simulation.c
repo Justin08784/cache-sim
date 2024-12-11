@@ -71,10 +71,10 @@ void policy_simulation_track_access(struct policy_simulation *ps, const struct e
 }
 
 // We evict from the head of the list
-void policy_simulation_evict(struct policy_simulation *ps, int num_to_evict) {
+void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_evict) {
 	printf("TODO: fix policy_simulation_evict\n");
 	int size = policy_simulation_size(ps);
-	printf("Size: %d, num_to_evict: %d\n", size, num_to_evict);
+	printf("Size: %d, num_to_evict: %lu\n", size, num_to_evict);
 	if (num_to_evict >= size) return;
 	while(num_to_evict--) {
 		struct list_entry *del_entry = ps->list_head;
@@ -103,7 +103,7 @@ void policy_simulation_print(struct policy_simulation *ps) {
 	}
 	*/
 
-	printf("Size: %d, Hits: %d, Misses: %d\n", policy_simulation_size(ps), ps->hits, ps->misses);
+	printf("Size: %d, Hits: %lu, Misses: %lu\n", policy_simulation_size(ps), ps->hits, ps->misses);
 }
 
 void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {

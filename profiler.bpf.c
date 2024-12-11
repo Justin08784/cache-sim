@@ -11,10 +11,10 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 512 * 1024 /* 512 KB */);
+	__uint(max_entries, 1200 * 1024 /* 1200 KB */);
 } events SEC(".maps");
 
-void send_event(struct folio *folio, enum access_type type) {
+void send_event(unsigned long data, enum access_type type) {
 	struct event *e;
 	struct task_key key;
 
@@ -29,7 +29,7 @@ void send_event(struct folio *folio, enum access_type type) {
 	key.pid = bpf_get_current_pid_tgid() >> 32;
 	bpf_get_current_comm(&key.command, 16);
 
-	e->folio = (unsigned long)folio;
+	e->folio = data;
 	e->type = type;
 	e->key = key;
 
@@ -43,7 +43,7 @@ int BPF_KPROBE(folio_mark_accessed, struct folio *folio)
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	send_event(folio, FMA);
+	send_event((unsigned long)folio, FMA);
 	//bpf_printk("folio_mark_accessed: pid = %d\n", pid);
 
 	return 0;
@@ -56,21 +56,27 @@ int BPF_KPROBE(filemap_add_folio, struct address_space *mapping, struct folio *f
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	send_event(folio, FAF);
+	send_event((unsigned long)folio, FAF);
 	//bpf_printk("filemap_add_folio: pid = %d\n", pid);
 
 	return 0;
 }
 
-// SEC("kprobe/folio_account_dirtied")
+/*
+ * We cannot hook into folio account dirtied, so we hook into
+ * __folio_mark_dirty, which calls folio_account_dirtied if
+ * folio->mapping is not null.
+ */
 SEC("kprobe/__folio_mark_dirty")
 int BPF_KPROBE(__folio_mark_dirty, struct folio *folio, struct address_space *mapping)
 {
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	send_event(folio, TEMP);
-	//bpf_printk("__folio_mark_dirty: pid = %d\n", pid);
+	if (BPF_CORE_READ(folio, mapping)) {
+		send_event((unsigned long)folio, FMD);
+		//bpf_printk("__folio_mark_dirty: pid = %d\n", pid);
+	}
 
 	return 0;
 }
@@ -82,8 +88,8 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	struct folio *folio;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
-	send_event(folio, MBD);
+	folio = (struct folio *)BPF_CORE_READ(bh, b_page); // TODO COMMENT
+	send_event((unsigned long)folio, MBD);
 	//send_event((struct folio *)30, SFL); // TODO: remove
 	//bpf_printk("mark_buffer_dirty: pid = %d\n", pid);
 
@@ -96,7 +102,8 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 	pid_t pid;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	send_event((struct folio *)ret, SFL);
-	bpf_printk("shrink_folio_list: pid = %d, ret = %ld\n", pid, ret);
+	send_event(ret, SFL);
+	//bpf_printk("shrink_folio_list: pid = %d, ret = %ld\n", pid, ret);
+
 	return 0;
 }

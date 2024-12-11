@@ -4,7 +4,7 @@
 enum access_type {
 	FMA,
 	FAF,
-	TEMP,
+	FMD,
 	MBD,
 	SFL,
 };
