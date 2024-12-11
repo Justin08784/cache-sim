@@ -136,6 +136,9 @@ $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
+simulator: simulator.c common.h policy_simulation.h policy_simulation.c
+	$(Q)$(CC) $(CFLAGS) $^ $(INCLUDES) -o $@
+
 # delete failed targets
 .DELETE_ON_ERROR:
 

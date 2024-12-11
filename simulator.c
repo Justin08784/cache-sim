@@ -15,7 +15,7 @@ int main() {
 
 	struct event e;
 	char type_str[16];
-	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, &e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) { // TODO
+	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, (int*)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) { // TODO
 		switch (e.type) {
 			case FMA:
 				strcpy(type_str, "FMA");
