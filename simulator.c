@@ -14,6 +14,37 @@ struct linux_task_stats_entry {
 };
 
 
+void event_print(struct event *e) {
+	char type_str[16];
+	switch (e->type) {
+		case FMA:
+			strcpy(type_str, "FMA");
+			break;
+		case FAF:
+			strcpy(type_str, "FAF");
+			break;
+		case FMD:
+			strcpy(type_str, "FMD");
+			break;
+		case MBD:
+			strcpy(type_str, "MBD");
+			break;
+		case SFL:
+			strcpy(type_str, "SFL");
+			break;
+	}
+
+	switch (e->type) {
+		case SFL:
+			printf("UID: %8d | PID: %8d | COMMAND: %16s | TYPE: %s | NUM_EVICTED: %lu\n", e->key.uid, e->key.pid, e->key.command, type_str, e->num_evicted);
+			break;
+		default:
+			printf("UID: %8d | PID: %8d | COMMAND: %16s | TYPE: %s | FOLIO: %lu\n", e->key.uid, e->key.pid, e->key.command, type_str, e->folio);
+			break;
+	}
+}
+
+
 int main() {
 	FILE *log_file = fopen("page.log", "r");
 	if (!log_file) {
@@ -28,35 +59,8 @@ int main() {
 	fma = faf = fmd = mbd = 0;
 
 	struct event e;
-	char type_str[16];
-	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.folio, (int*)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) {
-		switch (e.type) {
-			case FMA:
-				strcpy(type_str, "FMA");
-				break;
-			case FAF:
-				strcpy(type_str, "FAF");
-				break;
-			case FMD:
-				strcpy(type_str, "FMD");
-				break;
-			case MBD:
-				strcpy(type_str, "MBD");
-				break;
-			case SFL:
-				strcpy(type_str, "SFL");
-				break;
-		}
-
-		switch (e.type) {
-			case SFL:
-				printf("UID: %d | PID: %d | COMMAND: %s | TYPE: %s | NUM_EVICTED: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
-				break;
-			default:
-				printf("UID: %d | PID: %d | COMMAND: %s | TYPE: %s | FOLIO: %lu\n", e.key.uid, e.key.pid, e.key.command, type_str, e.folio);
-				break;
-		}
-
+	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.data, (int *)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) {
+		event_print(&e);
 
 		struct linux_task_stats_entry *ltse = NULL;
 		HASH_FIND(hh, linux_task_stats, &e.key, sizeof(struct task_key), ltse);
@@ -89,12 +93,9 @@ int main() {
 			default:
 				break;
 		}
-		if (e.type == SFL) {
-			policy_simulation_evict(ps, e.num_evicted);
-		} else {
-			policy_simulation_track_access(ps, &e);
-		}
+		policy_simulation_track_access(ps, &e);
 		policy_simulation_print(ps);
+		printf("\n");
 	}
 
 	fclose(log_file);

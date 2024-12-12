@@ -24,18 +24,11 @@ unsigned long event_counter;
 int handle_event(void *ctx, void *data, size_t data_size) {
 	const struct event *e = data;
 
-	fprintf(log_file, "%lu,%d,%d,%d,%s\n", e->folio, e->type, e->key.uid, e->key.pid, e->key.command);
+	fprintf(log_file, "%lu,%d,%d,%d,%s\n", e->data, e->type, e->key.uid, e->key.pid, e->key.command);
 	printf("Events Logged: %-32lu\r", event_counter++);
 	fflush(stdout);
 
-	/*
-	if (e->type == SFL) {
-		policy_simulation_evict(ps, e->num_evicted);
-		return 0;
-	}
-
-	policy_simulation_track_access(ps, e);
-	*/
+	//policy_simulation_track_access(ps, e);
 
 	return 0;
 }

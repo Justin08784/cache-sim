@@ -17,6 +17,7 @@ struct task_key {
 
 struct event {
 	union {
+		unsigned long data;
 		unsigned long folio;
 		unsigned long num_evicted;
 	};

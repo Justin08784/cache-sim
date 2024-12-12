@@ -20,7 +20,6 @@ void send_event(unsigned long data, enum access_type type) {
 
 	e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
 	if (!e) {
-		// TODO
 		bpf_printk("bpf_ringbuf_reserve failed\n");
 		return;
 	}
@@ -29,7 +28,7 @@ void send_event(unsigned long data, enum access_type type) {
 	key.pid = bpf_get_current_pid_tgid() >> 32;
 	bpf_get_current_comm(&key.command, 16);
 
-	e->folio = data;
+	e->data = data;
 	e->type = type;
 	e->key = key;
 
@@ -88,9 +87,14 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	struct folio *folio;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	folio = (struct folio *)BPF_CORE_READ(bh, b_page); // TODO COMMENT
+	/*
+	 * The buffer_head struct holds the b_page in a union with b_folio,
+	 * but b_folio does not exist in the buffer_head struct defined by
+	 * vm_linux.h. The b_page pointer should be the same as the
+	 * b_folio pointer.
+	 */
+	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
 	send_event((unsigned long)folio, MBD);
-	//send_event((struct folio *)30, SFL); // TODO: remove
 	//bpf_printk("mark_buffer_dirty: pid = %d\n", pid);
 
 	return 0;
@@ -107,3 +111,15 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 
 	return 0;
 }
+
+/*
+SEC("tracepoint/sched/sched_process_exit")
+int handle_sched_process_exit(struct trace_event_raw_sched_process_exec *ctx) {
+	pid_t pid;
+
+	pid = bpf_get_current_pid_tgid() >> 32;
+	bpf_printk("sched_process_exit: pid = %d\n", pid);
+
+	return 0;
+}
+*/
