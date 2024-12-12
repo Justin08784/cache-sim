@@ -128,7 +128,7 @@ void fifo_miss_update(struct policy_simulation *ps, unsigned long folio) {
 	entry->folio = folio;
 	entry->payload = NULL;
 
-	// Add entry to the end of the list
+	// Make entry the new tail of the list
 	DL_APPEND(ps->list_head, entry);
 }
 
@@ -163,6 +163,22 @@ void lfu_miss_update(struct policy_simulation *ps, unsigned long folio) {
 
 	// Make entry the new head of the list
 	DL_PREPEND(ps->list_head, entry);
+}
+
+void lru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {
+	// Remove hit_entry from the list
+	DL_DELETE(ps->list_head, hit_entry);
+	// Make hit_entry the new tail of the list
+	DL_APPEND(ps->list_head, hit_entry);
+}
+
+void lru_miss_update(struct policy_simulation *ps, unsigned long folio) {
+	struct list_entry *entry = (struct list_entry *)malloc(sizeof(struct list_entry));
+	entry->folio = folio;
+	entry->payload = NULL;
+
+	// Make entry the new tail of the list
+	DL_APPEND(ps->list_head, entry);
 }
 
 void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {

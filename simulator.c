@@ -54,6 +54,7 @@ int main() {
 
 	struct policy_simulation *fifo_ps = policy_simulation_init(&fifo_hit_update, &fifo_miss_update);
 	struct policy_simulation *lfu_ps = policy_simulation_init(&lfu_hit_update, &lfu_miss_update);
+	struct policy_simulation *lru_ps = policy_simulation_init(&lru_hit_update, &lru_miss_update);
 	struct policy_simulation *mru_ps = policy_simulation_init(&mru_hit_update, &mru_miss_update);
 
 	struct linux_task_stats_entry *linux_task_stats = NULL;
@@ -98,6 +99,7 @@ int main() {
 
 		policy_simulation_track_access(fifo_ps, &e);
 		policy_simulation_track_access(lfu_ps, &e);
+		policy_simulation_track_access(lru_ps, &e);
 		policy_simulation_track_access(mru_ps, &e);
 	}
 
@@ -109,6 +111,7 @@ int main() {
 	printf("%-16s    ", "Command");
 	printf("%-16s    ", "Real Hit %");
 	printf("%-16s    ", "FIFO Hit %");
+	printf("%-16s    ", "LFU Hit %");
 	printf("%-16s    ", "LRU Hit %");
 	printf("%-16s    ", "MRU Hit %");
 	printf("%-16s\n", "Hits + Misses");
@@ -134,8 +137,9 @@ int main() {
 		//float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
 
 		float fifo_hit_percent = policy_simulation_calculate_hit_percent(fifo_ps, &ltse->key);
-		float mru_hit_percent = policy_simulation_calculate_hit_percent(mru_ps, &ltse->key);
 		float lfu_hit_percent = policy_simulation_calculate_hit_percent(lfu_ps, &ltse->key);
+		float lru_hit_percent = policy_simulation_calculate_hit_percent(lru_ps, &ltse->key);
+		float mru_hit_percent = policy_simulation_calculate_hit_percent(mru_ps, &ltse->key);
 
 		//if (p->value.real_hits + p->value.sim_hits > 100) {
 		if (total > 0) {
@@ -143,6 +147,7 @@ int main() {
 			printf("%-16.2f    ", real_hit_percent);
 			printf("%-16.2f    ", fifo_hit_percent);
 			printf("%-16.2f    ", lfu_hit_percent);
+			printf("%-16.2f    ", lru_hit_percent);
 			printf("%-16.2f    ", mru_hit_percent);
 			printf("%-16.2f\n", total);
 		}

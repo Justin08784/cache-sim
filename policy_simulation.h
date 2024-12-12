@@ -39,6 +39,8 @@ void fifo_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry)
 void fifo_miss_update(struct policy_simulation *ps, unsigned long folio);
 void lfu_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
 void lfu_miss_update(struct policy_simulation *ps, unsigned long folio);
+void lru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
+void lru_miss_update(struct policy_simulation *ps, unsigned long folio);
 void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
 void mru_miss_update(struct policy_simulation *ps, unsigned long folio);
 
