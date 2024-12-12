@@ -90,6 +90,16 @@ void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_
 	}
 }
 
+float policy_simulation_calculate_hit_percent(struct policy_simulation *ps, const struct task_key *key) {
+	struct task_stats_entry *tse = NULL;
+	HASH_FIND(hh, ps->task_stats, key, sizeof(struct task_key), tse);
+	if (tse) {
+		return 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+	} else {
+		return -1;
+	}
+}
+
 int policy_simulation_size(struct policy_simulation *ps) {
 	struct list_entry *entry;
 	int size;
@@ -98,37 +108,33 @@ int policy_simulation_size(struct policy_simulation *ps) {
 }
 
 void policy_simulation_print(struct policy_simulation *ps) {
-	/*
 	struct list_entry *entry;
 	int position = 0;
 	DL_FOREACH(ps->list_head, entry) {
-		//printf("Position: %d, Folio: %lu\n", position++, entry->folio);
-		printf("Position: %d, Folio: %lu, Payload: %lu\n", position++, entry->folio, *(unsigned long *)entry->payload);
+		printf("Position: %d, Folio: %lu\n", position++, entry->folio);
+		//printf("Position: %d, Folio: %lu, Payload: %lu\n", position++, entry->folio, *(unsigned long *)entry->payload);
 	}
-	*/
 
 	printf("Size: %d, Hits: %lu, Misses: %lu\n", policy_simulation_size(ps), ps->hits, ps->misses);
 }
 
-void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {
-	// Remove hit_entry from the list
-	DL_DELETE(ps->list_head, hit_entry);
-	// Make hit_entry the new head of the list
-	DL_PREPEND(ps->list_head, hit_entry);
+void fifo_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {
+	// Do nothing on hit
+	return;
 }
 
-void mru_miss_update(struct policy_simulation *ps, unsigned long folio) {
+void fifo_miss_update(struct policy_simulation *ps, unsigned long folio) {
 	struct list_entry *entry = (struct list_entry *)malloc(sizeof(struct list_entry));
 	entry->folio = folio;
 	entry->payload = NULL;
 
-	// Make entry the new head of the list
-	DL_PREPEND(ps->list_head, entry);
+	// Add entry to the end of the list
+	DL_APPEND(ps->list_head, entry);
 }
 
-int lfu_payload_cmp(void *left, void *right) {
-	unsigned long l = *(unsigned long *)left;
-	unsigned long r = *(unsigned long *)right;
+int lfu_payload_cmp(struct list_entry *left, struct list_entry *right) {
+	unsigned long l = *(unsigned long *)left->payload;
+	unsigned long r = *(unsigned long *)right->payload;
 
 	if (l < r) {
 		return -1;
@@ -145,12 +151,8 @@ void lfu_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) 
 	// Remove hit_entry from the list
 	DL_DELETE(ps->list_head, hit_entry);
 
-	struct list_entry *entry;
-	DL_LOWER_BOUND(ps->list_head, entry, hit_entry, lfu_payload_cmp);
-	//printf("%p\n", entry);
-
-	// Make hit_entry the new head of the list
-	DL_PREPEND(entry, hit_entry);
+	// Insert hit_entry in sorted order
+	DL_INSERT_INORDER(ps->list_head, hit_entry, lfu_payload_cmp);
 }
 
 void lfu_miss_update(struct policy_simulation *ps, unsigned long folio) {
@@ -158,6 +160,22 @@ void lfu_miss_update(struct policy_simulation *ps, unsigned long folio) {
 	entry->folio = folio;
 	entry->payload = malloc(sizeof(unsigned long));
 	*(unsigned long *)entry->payload = 0;
+
+	// Make entry the new head of the list
+	DL_PREPEND(ps->list_head, entry);
+}
+
+void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry) {
+	// Remove hit_entry from the list
+	DL_DELETE(ps->list_head, hit_entry);
+	// Make hit_entry the new head of the list
+	DL_PREPEND(ps->list_head, hit_entry);
+}
+
+void mru_miss_update(struct policy_simulation *ps, unsigned long folio) {
+	struct list_entry *entry = (struct list_entry *)malloc(sizeof(struct list_entry));
+	entry->folio = folio;
+	entry->payload = NULL;
 
 	// Make entry the new head of the list
 	DL_PREPEND(ps->list_head, entry);

@@ -32,11 +32,14 @@ struct policy_simulation {
 struct policy_simulation *policy_simulation_init(void (*hit_update)(struct policy_simulation *, struct list_entry *), void (*miss_update)(struct policy_simulation *, unsigned long));
 void policy_simulation_track_access(struct policy_simulation *ps, const struct event *e);
 void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_evict);
+float policy_simulation_calculate_hit_percent(struct policy_simulation *ps, const struct task_key *key);
 int policy_simulation_size(struct policy_simulation *ps);
 void policy_simulation_print(struct policy_simulation *ps);
-void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
-void mru_miss_update(struct policy_simulation *ps, unsigned long folio);
+void fifo_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
+void fifo_miss_update(struct policy_simulation *ps, unsigned long folio);
 void lfu_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
 void lfu_miss_update(struct policy_simulation *ps, unsigned long folio);
+void mru_hit_update(struct policy_simulation *ps, struct list_entry *hit_entry);
+void mru_miss_update(struct policy_simulation *ps, unsigned long folio);
 
 #endif

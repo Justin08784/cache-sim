@@ -52,7 +52,9 @@ int main() {
 		return 0;
 	}
 
-	struct policy_simulation *ps = policy_simulation_init(&lfu_hit_update, &lfu_miss_update);
+	struct policy_simulation *fifo_ps = policy_simulation_init(&fifo_hit_update, &fifo_miss_update);
+	struct policy_simulation *lfu_ps = policy_simulation_init(&lfu_hit_update, &lfu_miss_update);
+	struct policy_simulation *mru_ps = policy_simulation_init(&mru_hit_update, &mru_miss_update);
 
 	struct linux_task_stats_entry *linux_task_stats = NULL;
 	unsigned long fma, faf, fmd, mbd;
@@ -93,18 +95,23 @@ int main() {
 			default:
 				break;
 		}
-		policy_simulation_track_access(ps, &e);
-		policy_simulation_print(ps);
-		printf("\n");
+
+		policy_simulation_track_access(fifo_ps, &e);
+		policy_simulation_track_access(lfu_ps, &e);
+		policy_simulation_track_access(mru_ps, &e);
 	}
 
 	fclose(log_file);
 
 	struct linux_task_stats_entry *ltse = NULL;
-	struct task_stats_entry *tse = NULL;
 	struct linux_task_stats_entry *tmp = NULL;
 	printf("\n");
-	printf("%-16s    %-16s    %-16s    %-16s\n", "Command", "Real Hit %", "Sim Hit %", "Hits + Misses");
+	printf("%-16s    ", "Command");
+	printf("%-16s    ", "Real Hit %");
+	printf("%-16s    ", "FIFO Hit %");
+	printf("%-16s    ", "LRU Hit %");
+	printf("%-16s    ", "MRU Hit %");
+	printf("%-16s\n", "Hits + Misses");
 	//HASH_ITER(hh, ps->task_stats, tse, tmp) {
 	HASH_ITER(hh, linux_task_stats, ltse, tmp) {
 		/*
@@ -126,12 +133,18 @@ int main() {
 		//float real_hit_percent = 100.0 * (hits / accesses);
 		//float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
 
-		struct task_key key = ltse->key;
-		HASH_FIND(hh, ps->task_stats, &key, sizeof(struct task_key), tse);
-		float sim_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+		float fifo_hit_percent = policy_simulation_calculate_hit_percent(fifo_ps, &ltse->key);
+		float mru_hit_percent = policy_simulation_calculate_hit_percent(mru_ps, &ltse->key);
+		float lfu_hit_percent = policy_simulation_calculate_hit_percent(lfu_ps, &ltse->key);
 
 		//if (p->value.real_hits + p->value.sim_hits > 100) {
-		if (total > 0)
-			printf("%-16s    %-16.2f    %-16.2f    %-16.2f\n", tse->key.command, real_hit_percent, sim_hit_percent, total);
+		if (total > 0) {
+			printf("%-16s    ", ltse->key.command);
+			printf("%-16.2f    ", real_hit_percent);
+			printf("%-16.2f    ", fifo_hit_percent);
+			printf("%-16.2f    ", lfu_hit_percent);
+			printf("%-16.2f    ", mru_hit_percent);
+			printf("%-16.2f\n", total);
+		}
 	}
 }
