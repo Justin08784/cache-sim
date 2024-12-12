@@ -19,7 +19,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 			 | sed 's/mips.*/mips/' \
 			 | sed 's/riscv64/riscv/' \
 			 | sed 's/loongarch64/loongarch/')
-VMLINUX := ./libbpf-bootstrap/vmlinux.h/include/$(ARCH)/vmlinux.h # TODO: fix this for README
+VMLINUX := ./libbpf-bootstrap/vmlinux.h/include/$(ARCH)/vmlinux.h
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
@@ -29,8 +29,8 @@ INCLUDES := -I$(OUTPUT) -I$(LIBBPF_BASE)include/uapi -I$(dir $(VMLINUX)) -I$(LIB
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = minimal minimal_legacy minimal_ns bootstrap uprobe fentry \
-       usdt sockfilter tc ksyscall task_iter lsm kprobe profiler lruvec
+# BPF apps
+APPS = profiler lruvec
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -80,7 +80,7 @@ all: $(APPS)
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS)
+	$(Q)rm -rf $(OUTPUT) $(APPS) profiler simulator page.log
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)

@@ -82,8 +82,9 @@ void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_
 	while(num_to_evict--) {
 		struct list_entry *del_entry = ps->list_head;
 		DL_DELETE(ps->list_head, del_entry);
-		if (del_entry->payload) {
+		if (del_entry && del_entry->payload) {
 			// WARNING: If payload points to a struct with other pointers in it that need to be freed, this will cause a memory leak
+            // Future work: have user provide a cleanup function for the payload, call it on payload and set payload to NULL
 			free(del_entry->payload);
 		}
 		free(del_entry);
@@ -92,6 +93,8 @@ void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_
 
 float policy_simulation_calculate_hit_percent(struct policy_simulation *ps, const struct task_key *key) {
 	struct task_stats_entry *tse = NULL;
+    assert(ps);
+    assert(key);
 	HASH_FIND(hh, ps->task_stats, key, sizeof(struct task_key), tse);
 	if (tse) {
 		return 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
@@ -101,6 +104,7 @@ float policy_simulation_calculate_hit_percent(struct policy_simulation *ps, cons
 }
 
 int policy_simulation_size(struct policy_simulation *ps) {
+    assert(ps);
 	struct list_entry *entry;
 	int size;
 	DL_COUNT(ps->list_head, entry, size);
@@ -108,10 +112,11 @@ int policy_simulation_size(struct policy_simulation *ps) {
 }
 
 void policy_simulation_print(struct policy_simulation *ps) {
-	struct list_entry *entry;
+    assert(ps);
+	struct list_entry *entry = NULL;
 	int position = 0;
 	DL_FOREACH(ps->list_head, entry) {
-		printf("Position: %d, Folio: %lu\n", position++, entry->folio);
+        if(entry) printf("Position: %d, Folio: %lu\n", position++, entry->folio);
 		//printf("Position: %d, Folio: %lu, Payload: %lu\n", position++, entry->folio, *(unsigned long *)entry->payload);
 	}
 

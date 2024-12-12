@@ -78,10 +78,12 @@ int main() {
 		}
 		switch (e.type) {
 			case FMA:
+                // folio mark accessed ()
 				fma++;
 				ltse->fma++;
 				break;
 			case FAF:
+                // filemap add folio (miss)
 				faf++;
 				ltse->faf++;
 				break;
@@ -121,7 +123,9 @@ int main() {
 		unsigned long total = ltse->fma + ltse->faf + ltse->fmd + ltse->mbd;
 		float real_hit_percent = 100.0 * ((float)(ltse->fma + ltse->faf) / (float)(total));
 		*/
-		float total = (float)ltse->fma - (float)ltse->mbd;
+        // total = total cache accesses without counting dirties
+        // misses = total of add to lru because of read misses
+        float total = (float)ltse->fma - (float)ltse->mbd;
 		float misses = (float)ltse->faf - (float)ltse->fmd;
 		if (misses < 0)
 			misses = 0;
