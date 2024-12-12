@@ -30,7 +30,7 @@ CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 APPS = minimal minimal_legacy minimal_ns bootstrap uprobe fentry \
-       usdt sockfilter tc ksyscall task_iter lsm kprobe profiler
+       usdt sockfilter tc ksyscall task_iter lsm kprobe profiler lruvec
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
