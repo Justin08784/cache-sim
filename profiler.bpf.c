@@ -95,6 +95,7 @@ int BPF_KPROBE(mark_buffer_dirty, struct buffer_head *bh)
 	 */
 	folio = (struct folio *)BPF_CORE_READ(bh, b_page);
 	send_event((unsigned long)folio, MBD);
+	//send_event((unsigned long)30, SFL);
 	//bpf_printk("mark_buffer_dirty: pid = %d\n", pid);
 
 	return 0;
@@ -111,15 +112,3 @@ int BPF_KRETPROBE(shrink_folio_list, unsigned int ret)
 
 	return 0;
 }
-
-/*
-SEC("tracepoint/sched/sched_process_exit")
-int handle_sched_process_exit(struct trace_event_raw_sched_process_exec *ctx) {
-	pid_t pid;
-
-	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("sched_process_exit: pid = %d\n", pid);
-
-	return 0;
-}
-*/

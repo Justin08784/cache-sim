@@ -22,34 +22,6 @@ void policy_simulation_track_access(struct policy_simulation *ps, const struct e
 		policy_simulation_evict(ps, e->num_evicted);
 		return;
 	}
-	/*
-	struct task_stats_entry *tse = NULL;
-	HASH_FIND(hh, linux_task_stats, &e->key, sizeof(struct task_key), tse);
-	if (!tse) {
-		tse = (struct task_stats_entry *)malloc(sizeof(struct task_stats_entry));
-		tse->key = e->key;
-		tse->hits = 0;
-		tse->misses = 0;
-		HASH_ADD(hh, linux_task_stats, key, sizeof(struct task_key), tse);
-	}
-	switch (e->type) {
-		case FMA:
-			tse->hits++;
-			break;
-		case FAF:
-			tse->misses++;
-			break;
-		case TEMP:
-			tse->misses++;
-			break;
-		case MBD:
-			tse->hits++;
-			break;
-		default:
-			return;
-			break;
-	}
-	*/
 
 	struct task_stats_entry *tse = NULL;
 	HASH_FIND(hh, ps->task_stats, &e->key, sizeof(struct task_key), tse);
@@ -91,7 +63,15 @@ void policy_simulation_evict(struct policy_simulation *ps, unsigned long num_to_
 	}
 }
 
-float policy_simulation_calculate_hit_percent(struct policy_simulation *ps, const struct task_key *key) {
+float policy_simulation_total_hit_percent(struct policy_simulation *ps) {
+	if (ps->hits + ps->misses > 0) {
+		return 100.0 * ((float)ps->hits / (float)(ps->hits + ps->misses));
+	} else {
+		return -1;
+	}
+}
+
+float policy_simulation_task_hit_percent(struct policy_simulation *ps, const struct task_key *key) {
 	struct task_stats_entry *tse = NULL;
     assert(ps);
     assert(key);

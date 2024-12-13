@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <string.h>
+#include <getopt.h>
+#include <stdbool.h>
+#include <math.h>
 #include "common.h"
 #include "policy_simulation.h"
+
+
+struct simulator_opts {
+	bool p;
+	bool s;
+};
 
 
 struct linux_task_stats_entry {
@@ -12,6 +21,24 @@ struct linux_task_stats_entry {
 	unsigned long mbd;
 	UT_hash_handle hh;
 };
+
+
+float calculate_linux_hit_percent(unsigned long fma, unsigned long faf, unsigned long fmd, unsigned long mbd) {
+	// total = total cache accesses without counting dirties
+	// misses = total of add to lru because of read misses
+	float total = (float)fma - (float)mbd;
+	float misses = (float)faf - (float)fmd;
+	if (misses < 0)
+		misses = 0;
+	if (total < 0)
+		total = 0;
+	float hits = total - misses;
+	if (hits < 0) {
+		misses = total;
+		hits = 0;
+	}
+	return 100.0 * (hits / total);
+}
 
 
 void event_print(struct event *e) {
@@ -45,7 +72,29 @@ void event_print(struct event *e) {
 }
 
 
-int main() {
+int main(int argc, char **argv) {
+	struct simulator_opts flags;
+	flags.p = false;
+	flags.s = false;
+	int opt;
+	while ((opt = getopt(argc, argv, "ps")) != -1) {
+		switch(opt) {
+			case 'p':
+				flags.p = true;
+				break;
+			case 's':
+				flags.s = true;
+				break;
+			case '?':
+				printf("Usage: %s [-p] [-s]\n", argv[0]);
+				printf("-p: Print events\n");
+				printf("-s: Simulate evictions\n");
+				return 1;
+				break;
+		}
+	}
+
+
 	FILE *log_file = fopen("page.log", "r");
 	if (!log_file) {
 		printf("Failed to open log file\n");
@@ -62,8 +111,19 @@ int main() {
 	fma = faf = fmd = mbd = 0;
 
 	struct event e;
+	unsigned long event_count = 0;
 	while (fscanf(log_file, "%lu,%d,%d,%d,%[^\n]s\n", &e.data, (int *)&e.type, &e.key.uid, &e.key.pid, e.key.command) == 5) {
-		event_print(&e);
+		event_count++;
+		if (flags.s && event_count % 100 == 0) {
+			unsigned long num_evicted = 10;
+			policy_simulation_evict(fifo_ps, num_evicted);
+			policy_simulation_evict(lfu_ps, num_evicted);
+			policy_simulation_evict(lru_ps, num_evicted);
+			policy_simulation_evict(mru_ps, num_evicted);
+		}
+		if (flags.p) {
+			event_print(&e);
+		}
 
 		struct linux_task_stats_entry *ltse = NULL;
 		HASH_FIND(hh, linux_task_stats, &e.key, sizeof(struct task_key), ltse);
@@ -117,43 +177,40 @@ int main() {
 	printf("%-16s    ", "LRU Hit %");
 	printf("%-16s    ", "MRU Hit %");
 	printf("%-16s\n", "Hits + Misses");
-	//HASH_ITER(hh, ps->task_stats, tse, tmp) {
+
+	float real_hit_percent, fifo_hit_percent, lfu_hit_percent, lru_hit_percent, mru_hit_percent;
+	real_hit_percent = calculate_linux_hit_percent(fma, faf, fmd, mbd);
+	fifo_hit_percent = policy_simulation_total_hit_percent(fifo_ps);
+	lfu_hit_percent = policy_simulation_total_hit_percent(lfu_ps);
+	lru_hit_percent = policy_simulation_total_hit_percent(lru_ps);
+	mru_hit_percent = policy_simulation_total_hit_percent(mru_ps);
+	printf("%-16s    ", "TOTAL");
+	printf("%-16.2f    ", real_hit_percent);
+	printf("%-16.2f    ", fifo_hit_percent);
+	printf("%-16.2f    ", lfu_hit_percent);
+	printf("%-16.2f    ", lru_hit_percent);
+	printf("%-16.2f    ", mru_hit_percent);
+	printf("%-16lu\n", fifo_ps->hits + fifo_ps->misses);
+
 	HASH_ITER(hh, linux_task_stats, ltse, tmp) {
-		/*
-		unsigned long total = ltse->fma + ltse->faf + ltse->fmd + ltse->mbd;
-		float real_hit_percent = 100.0 * ((float)(ltse->fma + ltse->faf) / (float)(total));
-		*/
-        // total = total cache accesses without counting dirties
-        // misses = total of add to lru because of read misses
-        float total = (float)ltse->fma - (float)ltse->mbd;
-		float misses = (float)ltse->faf - (float)ltse->fmd;
-		if (misses < 0)
-			misses = 0;
-		if (total < 0)
-			total = 0;
-		float hits = total - misses;
-		if (hits < 0) {
-			misses = total;
-			hits = 0;
-		}
-		float real_hit_percent = 100.0 * (hits / total);
-		//float real_hit_percent = 100.0 * (hits / accesses);
-		//float real_hit_percent = 100.0 * ((float)tse->hits / (float)(tse->hits + tse->misses));
+		real_hit_percent = calculate_linux_hit_percent(ltse->fma, ltse->faf, ltse->fmd, ltse->mbd);
 
-		float fifo_hit_percent = policy_simulation_calculate_hit_percent(fifo_ps, &ltse->key);
-		float lfu_hit_percent = policy_simulation_calculate_hit_percent(lfu_ps, &ltse->key);
-		float lru_hit_percent = policy_simulation_calculate_hit_percent(lru_ps, &ltse->key);
-		float mru_hit_percent = policy_simulation_calculate_hit_percent(mru_ps, &ltse->key);
+		fifo_hit_percent = policy_simulation_task_hit_percent(fifo_ps, &ltse->key);
+		lfu_hit_percent = policy_simulation_task_hit_percent(lfu_ps, &ltse->key);
+		lru_hit_percent = policy_simulation_task_hit_percent(lru_ps, &ltse->key);
+		mru_hit_percent = policy_simulation_task_hit_percent(mru_ps, &ltse->key);
 
-		//if (p->value.real_hits + p->value.sim_hits > 100) {
-		if (total > 0) {
+
+		if (!isnan(real_hit_percent)) {
+			struct task_stats_entry *tse = NULL;
+			HASH_FIND(hh, fifo_ps->task_stats, &ltse->key, sizeof(struct task_key), tse);
 			printf("%-16s    ", ltse->key.command);
 			printf("%-16.2f    ", real_hit_percent);
 			printf("%-16.2f    ", fifo_hit_percent);
 			printf("%-16.2f    ", lfu_hit_percent);
 			printf("%-16.2f    ", lru_hit_percent);
 			printf("%-16.2f    ", mru_hit_percent);
-			printf("%-16.2f\n", total);
+			printf("%-16lu\n", tse->hits + tse->misses);
 		}
 	}
 }
